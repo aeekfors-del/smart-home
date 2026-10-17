@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Background -->
+    <path
+        android:fillColor="#1A237E"
+        android:pathData="M0,0h108v108h-108z"/>
+    
+    <!-- Top-left quadrant - blue circuit -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M0,0h54v54h-54z"/>
+    
+    <!-- Circuit lines -->
+    <path
+        android:strokeColor="#64B5F6"
+        android:strokeWidth="2"
+        android:pathData="M15,15 L30,15 L30,30"/>
+    <path
+        android:strokeColor="#64B5F6"
+        android:strokeWidth="2"
+        android:pathData="M45,15 L30,15 L30,30"/>
+    <path
+        android:strokeColor="#64B5F6"
+        android:strokeWidth="2"
+        android:pathData="M15,45 L15,30 L30,30"/>
+    
+    <!-- Connection dots -->
+    <path
+        android:fillColor="#64B5F6"
+        android:pathData="M30,15 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0"/>
+    <path
+        android:fillColor="#64B5F6"
+        android:pathData="M30,30 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0"/>
+    
+    <!-- Top-right quadrant - green with signal -->
+    <path
+        android:fillColor="#2E7D32"
+        android:pathData="M54,0h54v54h-54z"/>
+    
+    <!-- Signal waves -->
+    <path
+        android:strokeColor="#81C784"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M81,20 A10,10 0 0,1 81,40"/>
+    <path
+        android:strokeColor="#81C784"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M81,15 A15,15 0 0,1 81,45"/>
+    <path
+        android:strokeColor="#81C784"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M81,10 A20,20 0 0,1 81,50"/>
+    
+    <!-- Arrow up -->
+    <path
+        android:fillColor="#81C784"
+        android:pathData="M81,25 L75,35 L81,35 L81,30 L87,30 L87,35 L93,35 Z"/>
+    
+    <!-- Bottom-left quadrant - blue maze -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M0,54h54v54h-54z"/>
+    
+    <!-- Maze pattern -->
+    <path
+        android:strokeColor="#64B5F6"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M15,69 L15,81 L27,81 L27,69 L39,69 L39,81 L51,81"/>
+    
+    <!-- Bottom-right quadrant - green leaf with circuit -->
+    <path
+        android:fillColor="#2E7D32"
+        android:pathData="M54,54h54v54h-54z"/>
+    
+    <!-- Leaf shape -->
+    <path
+        android:fillColor="#81C784"
+        android:pathData="M81,69 C81,69 93,69 93,81 C93,93 81,93 81,93 C81,93 69,93 69,81 C69,69 81,69 81,69"/>
+    
+    <!-- Leaf vein -->
+    <path
+        android:strokeColor="#4CAF50"
+        android:strokeWidth="2"
+        android:pathData="M81,69 L81,93"/>
+    
+    <!-- Small circuit dots -->
+    <path
+        android:fillColor="#81C784"
+        android:pathData="M75,75 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"/>
+    <path
+        android:fillColor="#81C784"
+        android:pathData="M87,87 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"/>
+</vector>
