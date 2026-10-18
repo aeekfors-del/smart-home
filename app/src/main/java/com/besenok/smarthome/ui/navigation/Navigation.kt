@@ -41,9 +41,7 @@ fun NavGraphBuilder.mainScreen(
     navController: NavHostController
 ) {
     composable(Screen.Dashboard.route) {
-        DashboardScreen(
-            onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
-        )
+        DashboardScreen()
     }
     composable(Screen.Devices.route) {
         DeviceListScreen(

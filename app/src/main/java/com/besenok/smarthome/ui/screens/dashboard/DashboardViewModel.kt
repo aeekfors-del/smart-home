@@ -1,5 +1,6 @@
 package com.besenok.smarthome.ui.screens.dashboard
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.besenok.smarthome.domain.repository.IobrokerRepository
@@ -16,6 +17,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+private const val TAG = "DashboardViewModel"
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
@@ -35,6 +38,9 @@ class DashboardViewModel @Inject constructor(
 
     private val _weatherState = MutableStateFlow<UiState<WeatherInfo>>(UiState.Loading)
     val weatherState: StateFlow<UiState<WeatherInfo>> = _weatherState.asStateFlow()
+
+    private val _forecastState = MutableStateFlow<UiState<List<WeatherInfo.ForecastEntry>>>(UiState.Success(emptyList()))
+    val forecastState: StateFlow<UiState<List<WeatherInfo.ForecastEntry>>> = _forecastState.asStateFlow()
 
     private val _timeState = MutableStateFlow<UiState<TimeInfo>>(UiState.Loading)
     val timeState: StateFlow<UiState<TimeInfo>> = _timeState.asStateFlow()
@@ -72,8 +78,19 @@ class DashboardViewModel @Inject constructor(
     private fun loadWeather() {
         viewModelScope.launch {
             try {
-                _weatherState.value = weatherRepository.getCurrentWeather(55.7558, 37.6173)
+                val lat = 55.7558
+                val lon = 37.6173
+                
+                // Загружаем текущую погоду
+                _weatherState.value = weatherRepository.getCurrentWeather(lat, lon)
+                
+                // Загружаем прогноз
+                Log.d(TAG, "Loading forecast for Moscow: $lat, $lon")
+                val forecastResult = weatherRepository.getForecast(lat, lon)
+                Log.d(TAG, "Forecast result: $forecastResult")
+                _forecastState.value = forecastResult
             } catch (e: Exception) {
+                Log.e(TAG, "Error loading weather", e)
                 _weatherState.value = UiState.Error(e.message ?: "Failed to load weather")
             }
         }

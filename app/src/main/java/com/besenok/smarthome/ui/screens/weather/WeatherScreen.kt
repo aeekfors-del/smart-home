@@ -1,12 +1,15 @@
 package com.besenok.smarthome.ui.screens.weather
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.besenok.smarthome.ui.common.UiState
@@ -15,6 +18,7 @@ import com.besenok.smarthome.ui.common.UiState
 @Composable
 fun WeatherScreen(viewModel: WeatherViewModel = hiltViewModel()) {
     val weather by viewModel.weather.collectAsState()
+    val forecast by viewModel.forecast.collectAsState()
     var showCityInput by remember { mutableStateOf(false) }
     var cityInput by remember { mutableStateOf("") }
     var latInput by remember { mutableStateOf("") }
@@ -108,12 +112,25 @@ fun WeatherScreen(viewModel: WeatherViewModel = hiltViewModel()) {
                         }
                     }
 
-                    Text("Прогноз на 5 дней", style = MaterialTheme.typography.titleLarge)
-                    ForecastDayItem("Понедельник", "22°C", "Ясно")
-                    ForecastDayItem("Вторник", "19°C", "Облачно")
-                    ForecastDayItem("Среда", "17°C", "Дождь")
-                    ForecastDayItem("Четверг", "20°C", "Переменная облачность")
-                    ForecastDayItem("Пятница", "23°C", "Ясно")
+                    // Прогноз на 5 дней
+                    val forecastData = (forecast as? UiState.Success)?.data ?: emptyList()
+                    
+                    if (forecastData.isNotEmpty()) {
+                        Text("Прогноз на 5 дней", style = MaterialTheme.typography.titleLarge)
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(forecastData) { entry ->
+                                ForecastDayItem(
+                                    day = entry.dayName,
+                                    temp = String.format("%.0f°C", entry.temperature),
+                                    condition = entry.condition
+                                )
+                            }
+                        }
+                    } else {
+                        Text("Загрузка прогноза...", style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
                 is UiState.Error -> {
                     Text(

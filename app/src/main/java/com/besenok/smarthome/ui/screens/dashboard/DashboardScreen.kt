@@ -1,7 +1,9 @@
 package com.besenok.smarthome.ui.screens.dashboard
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -9,21 +11,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.besenok.smarthome.data.local.datastore.AppPreferencesDataSource
+import com.besenok.smarthome.domain.model.WeatherInfo
 import com.besenok.smarthome.ui.common.UiState
-import com.besenok.smarthome.ui.screens.weather.WeatherViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
-    onNavigateToSettings: () -> Unit,
-    viewModel: DashboardViewModel = hiltViewModel(),
-    weatherViewModel: WeatherViewModel = hiltViewModel()
+    viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val connectionState by viewModel.connectionState.collectAsState()
-    val weather by weatherViewModel.weather.collectAsState()
+    val weather by viewModel.weatherState.collectAsState()
+    val forecast by viewModel.forecastState.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember { AppPreferencesDataSource(context) }
     val weatherRegion by preferences.weatherRegion.collectAsState(
@@ -37,20 +40,17 @@ fun DashboardScreen(
             val lat = coords[0].toDoubleOrNull()
             val lon = coords[1].toDoubleOrNull()
             if (lat != null && lon != null) {
-                weatherViewModel.loadWeather(lat, lon)
+                // TODO: Добавить метод loadWeatherWithForecast в DashboardViewModel
             }
         }
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Умный дом") },
-                actions = {
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, "Настройки")
-                    }
-                }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
             )
         }
     ) { paddingValues ->
@@ -97,17 +97,13 @@ fun DashboardScreen(
                 }
                 
                 // ===== ROW 3 =====
-                item {
-                    // Cell 7: Пусто
-                    DashboardPlaceholderCard()
-                }
-                item {
-                    // Cell 8: Пусто
-                    DashboardPlaceholderCard()
-                }
-                item {
-                    // Cell 9: Пусто
-                    DashboardPlaceholderCard()
+                item(
+                    key = "forecast",
+                    contentType = "forecast",
+                    span = { GridItemSpan(3) }
+                ) {
+                    // Cell 7-9: Прогноз на 5 дней (на всю ширину)
+                    ForecastWidgetCard(forecast)
                 }
             }
         }
@@ -131,6 +127,114 @@ fun DashboardPlaceholderCard() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
+        }
+    }
+}
+
+@Composable
+fun ForecastWidgetCard(forecast: UiState<List<WeatherInfo.ForecastEntry>>) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "Прогноз на 5 дней",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+        
+        when (forecast) {
+            is UiState.Loading -> {
+                CircularProgressIndicator()
+            }
+            is UiState.Success -> {
+                val forecastList = forecast.data
+                if (forecastList.isEmpty()) {
+                    Text(
+                        "Нет данных о прогнозе",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    // Отображаем прогноз с фиксированным размером карточек
+                    ForecastRow(forecastList)
+                }
+            }
+            is UiState.Error -> {
+                Text(
+                    forecast.message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ForecastRow(forecastList: List<WeatherInfo.ForecastEntry>) {
+    // Показываем первые 5 дней
+    val displayList = forecastList.take(5)
+    
+    // Карточки фиксированного размера с равными отступами
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.Top
+    ) {
+        displayList.forEach { entry ->
+            ForecastDayCardCompact(entry)
+        }
+    }
+}
+
+@Composable
+fun ForecastDayCardCompact(entry: WeatherInfo.ForecastEntry) {
+    val weatherIcon = getWeatherIcon(entry.iconCode)
+    
+    // Фиксированный размер карточки (увеличено в 1.5 раза: 80*1.5=120, 120*1.5=180)
+    Box(
+        modifier = Modifier
+            .width(120.dp)
+            .height(180.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // День недели
+                Text(
+                    entry.dayName.take(3),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                // Иконка погоды (увеличена)
+                Text(
+                    weatherIcon,
+                    style = MaterialTheme.typography.displayLarge
+                )
+                
+                // Температура (увеличена)
+                Text(
+                    String.format("%.0f°", entry.temperature),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

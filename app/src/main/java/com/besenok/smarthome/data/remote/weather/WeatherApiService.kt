@@ -1,6 +1,8 @@
 package com.besenok.smarthome.data.remote.weather
 
+import android.util.Log
 import com.besenok.smarthome.data.local.datastore.AppPreferencesDataSource
+import com.besenok.smarthome.data.remote.weather.model.OpenWeatherForecastResponse
 import com.besenok.smarthome.data.remote.weather.model.OpenWeatherMapResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -14,6 +16,8 @@ import kotlinx.serialization.json.Json
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "WeatherApiService"
 
 @Singleton
 class WeatherApiService @Inject constructor(
@@ -45,6 +49,26 @@ class WeatherApiService @Inject constructor(
         val apiKey = getApiKey()
         
         return client.get(BASE_URL) {
+            parameter("lat", lat)
+            parameter("lon", lon)
+            parameter("appid", apiKey)
+            parameter("units", "metric")
+            parameter("lang", "ru")
+        }.body()
+    }
+
+    /**
+     * Получение прогноза на 5 дней (Forecast 2.5 API)
+     * Документация: https://openweathermap.org/forecast
+     * @return Список прогнозов (каждые 3 часа, всего 40 записей)
+     */
+    suspend fun getForecast(lat: Double, lon: Double): OpenWeatherForecastResponse {
+        val apiKey = getApiKey()
+        val forecastUrl = "https://api.openweathermap.org/data/2.5/forecast"
+        
+        Log.d(TAG, "Getting forecast for lat=$lat, lon=$lon")
+        
+        return client.get(forecastUrl) {
             parameter("lat", lat)
             parameter("lon", lon)
             parameter("appid", apiKey)

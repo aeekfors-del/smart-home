@@ -3,6 +3,7 @@ package com.besenok.smarthome.ui.screens.weather
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.besenok.smarthome.domain.model.WeatherInfo
+import com.besenok.smarthome.domain.usecase.weather.GetForecastUseCase
 import com.besenok.smarthome.domain.usecase.weather.GetWeatherUseCase
 import com.besenok.smarthome.ui.common.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,11 +15,15 @@ import javax.inject.Inject
 
 @HiltViewModel
 class WeatherViewModel @Inject constructor(
-    private val getWeatherUseCase: GetWeatherUseCase
+    private val getWeatherUseCase: GetWeatherUseCase,
+    private val getForecastUseCase: GetForecastUseCase
 ) : ViewModel() {
 
     private val _weather = MutableStateFlow<UiState<WeatherInfo>>(UiState.Loading)
     val weather: StateFlow<UiState<WeatherInfo>> = _weather.asStateFlow()
+
+    private val _forecast = MutableStateFlow<UiState<List<WeatherInfo.ForecastEntry>>>(UiState.Success(emptyList()))
+    val forecast: StateFlow<UiState<List<WeatherInfo.ForecastEntry>>> = _forecast.asStateFlow()
 
     private val _city = MutableStateFlow("")
     val city: StateFlow<String> = _city.asStateFlow()
@@ -30,6 +35,16 @@ class WeatherViewModel @Inject constructor(
                 _weather.value = state
                 if (state is UiState.Success) {
                     _city.value = state.data.city
+                    
+                    // Загружаем прогноз
+                    val forecastState = getForecastUseCase(lat, lon)
+                    _forecast.value = forecastState
+                    
+                    // Обновляем weather с прогнозом
+                    if (forecastState is UiState.Success) {
+                        val weatherWithForecast = state.data.copy(forecast = forecastState.data)
+                        _weather.value = UiState.Success(weatherWithForecast)
+                    }
                 }
             } catch (e: Exception) {
                 _weather.value = UiState.Error(e.message ?: "Failed to load weather")
