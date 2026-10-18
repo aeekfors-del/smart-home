@@ -15,9 +15,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.besenok.smarthome.domain.model.AdapterInfo
 import com.besenok.smarthome.domain.model.Device
 import com.besenok.smarthome.ui.common.UiState
-import kotlinx.serialization.json.JsonObject
 
 private const val TAG = "AddDeviceDialog"
 
@@ -28,7 +28,7 @@ private const val TAG = "AddDeviceDialog"
 @Composable
 fun AddDeviceDialog(
     onDismiss: () -> Unit,
-    adaptersState: UiState<List<JsonObject>>,
+    adaptersState: UiState<List<AdapterInfo>>,
     devicesState: UiState<List<Device>>,
     onAddDevices: (List<Device>) -> Unit,
     onSelectedDevicesChanged: (List<Device>) -> Unit,
@@ -38,6 +38,22 @@ fun AddDeviceDialog(
     var selectedDevices by remember { mutableStateOf(mutableSetOf<Device>()) }
     var showingDeviceList by remember { mutableStateOf(false) }
     var currentAdapterId by remember { mutableStateOf<String?>(null) }
+    
+    // Сбрасываем выбранные устройства при открытии диалога
+    LaunchedEffect(showingDeviceList) {
+        if (showingDeviceList) {
+            selectedDevices.clear()
+            Log.d(TAG, "Cleared selected devices when showing device list")
+        }
+    }
+    
+    // Сбрасываем выбранные устройства при смене адаптера
+    LaunchedEffect(currentAdapterId) {
+        if (currentAdapterId != null) {
+            selectedDevices.clear()
+            Log.d(TAG, "Cleared selected devices for adapter: $currentAdapterId")
+        }
+    }
     
     // Собираем устройства в список для отображения
     val devicesList = when (val state = devicesState) {
@@ -64,10 +80,14 @@ fun AddDeviceDialog(
     
     val toggleDevice: (Device) -> Unit = { device ->
         val newSet = selectedDevices.toMutableSet()
-        if (newSet.contains(device)) {
-            newSet.remove(device)
+        // Ищем устройство по ID, а не по объекту
+        val existingDevice = newSet.find { it.id == device.id }
+        if (existingDevice != null) {
+            newSet.remove(existingDevice)
+            Log.d(TAG, "Removed device: ${device.id}")
         } else {
             newSet.add(device)
+            Log.d(TAG, "Added device: ${device.id}")
         }
         selectedDevices = newSet
         onSelectedDevicesChanged(selectedDevices.toList())
@@ -133,7 +153,7 @@ fun AddDeviceDialog(
 
 @Composable
 fun AdapterList(
-    adaptersState: UiState<List<JsonObject>>,
+    adaptersState: UiState<List<AdapterInfo>>,
     selectedAdapterId: String? = null,
     onAdapterClick: (adapterId: String, adapterName: String) -> Unit = { _, _ -> }
 ) {
@@ -151,65 +171,28 @@ fun AdapterList(
             }
         }
         is UiState.Success -> {
-            if (state.data.isEmpty()) {
+            val adapters = state.data
+            Log.d(TAG, "Found ${adapters.size} adapters, selectedAdapterId=$selectedAdapterId")
+            
+            if (adapters.isEmpty()) {
                 Text("Адаптеры не найдены")
             } else {
-                // Извлекаем уникальные ID адаптеров и их состояние alive
-                // system.adapter.admin.0.alive -> admin.0
-                // system.adapter.tuya.0.upload -> tuya.0
-                val adapterMap = mutableMapOf<String, Pair<String, Boolean>>() // (adapterId, adapterName, isAlive)
-                
-                for (obj in state.data) {
-                    val id = obj["_id"]?.toString()?.trim('"') ?: ""
-                    if (id.contains("system.adapter.")) {
-                        val parts = id.split(".")
-                        if (parts.size >= 5) {
-                            // system.adapter.name.0.something -> name.0
-                            val adapterBaseId = "${parts[2]}.${parts[3]}"
-                            
-                            // Проверяем, это alive или другой параметр
-                            val isAlive = parts.size >= 6 && parts[5] == "alive"
-                            val value = obj["val"]?.toString()
-                            val isAliveValue = if (isAlive) {
-                                value == "true" || value == "1" || value == "True"
-                            } else {
-                                null
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(adapters, key = { it.id }) { adapter ->
+                        val isSelected = adapter.id == selectedAdapterId
+                        Log.d(TAG, "Adapter ${adapter.id} (${adapter.name}): isSelected=$isSelected")
+                        
+                        AdapterItem(
+                            adapterId = adapter.id,
+                            adapterName = adapter.name,
+                            isAlive = adapter.alive,
+                            isSelected = isSelected,
+                            onClick = {
+                                onAdapterClick(adapter.id, adapter.name)
                             }
-                            
-                            // Имя адаптера = ID адаптера
-                            if (!adapterMap.containsKey(adapterBaseId)) {
-                                adapterMap[adapterBaseId] = adapterBaseId to (isAliveValue ?: true)
-                            } else if (isAlive) {
-                                // Обновляем значение alive если нашли
-                                adapterMap[adapterBaseId] = adapterMap[adapterBaseId]!!.first to (isAliveValue ?: true)
-                            }
-                        }
-                    }
-                }
-                
-                val adapters = adapterMap.toList()
-                Log.d(TAG, "Found ${adapters.size} adapters, selectedAdapterId=$selectedAdapterId")
-                
-                if (adapters.isEmpty()) {
-                    Text("Системные адаптеры не найдены")
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(adapters) { (adapterId, adapterInfo) ->
-                            val (name, isAlive) = adapterInfo
-                            val isSelected = adapterId == selectedAdapterId
-                            Log.d(TAG, "Adapter $adapterId ($name): isSelected=$isSelected, selectedAdapterId=$selectedAdapterId")
-                            AdapterItem(
-                                adapterId = adapterId,
-                                adapterName = name,
-                                isAlive = isAlive,
-                                isSelected = isSelected,
-                                onClick = {
-                                    onAdapterClick(adapterId, name)
-                                }
-                            )
-                        }
+                        )
                     }
                 }
             }

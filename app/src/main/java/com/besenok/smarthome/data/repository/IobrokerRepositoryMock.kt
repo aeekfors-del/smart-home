@@ -5,6 +5,7 @@ import com.besenok.smarthome.data.local.room.dao.DeviceStateDao
 import com.besenok.smarthome.data.local.room.dao.ScenarioDao
 import com.besenok.smarthome.data.remote.iobroker.IobrokerApiService
 import com.besenok.smarthome.data.remote.iobroker.IobrokerWebSocketClient
+import com.besenok.smarthome.domain.model.AdapterInfo
 import com.besenok.smarthome.domain.model.ControlType
 import com.besenok.smarthome.domain.model.Device
 import com.besenok.smarthome.domain.model.Sensor
@@ -159,10 +160,16 @@ class IobrokerRepositoryMock @Inject constructor(
         return UiState.Success(Unit)
     }
 
-    override suspend fun getAdapters(): UiState<List<JsonObject>> {
-        // Mock - возвращаем пустой список адаптеров
+    override suspend fun getAdapters(): UiState<List<AdapterInfo>> {
+        // Mock - возвращаем тестовые адаптеры
         delay(300)
-        return UiState.Success(emptyList())
+        return UiState.Success(
+            listOf(
+                AdapterInfo("mihome.0", "Mi Home", alive = true, connected = true, devicesCount = 12),
+                AdapterInfo("tuya.0", "Tuya", alive = true, connected = true, devicesCount = 8),
+                AdapterInfo("admin.0", "Admin", alive = true, connected = true, devicesCount = 0)
+            )
+        )
     }
 
     override suspend fun getDevicesFromAdapter(adapterId: String): UiState<List<Device>> {

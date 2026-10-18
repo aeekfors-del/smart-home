@@ -4,6 +4,7 @@ import android.util.Log
 import com.besenok.smarthome.data.local.datastore.AppPreferencesDataSource
 import com.besenok.smarthome.data.remote.iobroker.IobrokerApiService
 import com.besenok.smarthome.data.remote.iobroker.IobrokerWebSocketClient
+import com.besenok.smarthome.domain.model.AdapterInfo
 import com.besenok.smarthome.domain.model.ControlType
 import com.besenok.smarthome.domain.model.Device
 import com.besenok.smarthome.domain.model.Sensor
@@ -51,17 +52,42 @@ class IobrokerRepositoryImpl @Inject constructor(
     private suspend fun parseDevicesFromObjects(): List<Device> {
         val allDevices = mutableListOf<Device>()
         
-        // Парсим mihome.0 (устройства в mihome.0.devices.*)
-        val mihomeDevices = parseGroupDevices("mihome.0.devices.*", "mihome.0")
-        allDevices.addAll(mihomeDevices)
-        Log.d(TAG, "Parsed ${mihomeDevices.size} devices from mihome.0")
+        // Получаем список добавленных адаптеров из DataStore
+        val addedAdapters = settingsDataSource.getAddedAdapterIds()
+        Log.d(TAG, "Loaded ${addedAdapters.size} added adapters from DataStore: $addedAdapters")
         
-        // Парсим tuya.0 (устройства в tuya.0.*)
-        val tuyaDevices = parseGroupDevices("tuya.0.*", "tuya.0")
-        allDevices.addAll(tuyaDevices)
-        Log.d(TAG, "Parsed ${tuyaDevices.size} devices from tuya.0")
+        // Получаем список добавленных deviceIds
+        val addedDeviceIds = settingsDataSource.getAddedDeviceIds()
+        Log.d(TAG, "Loaded ${addedDeviceIds.size} added deviceIds from DataStore: $addedDeviceIds")
         
-        Log.d(TAG, "Total parsed devices: ${allDevices.size}")
+        if (addedAdapters.isEmpty() && addedDeviceIds.isEmpty()) {
+            Log.d(TAG, "No adapters or devices added yet, returning empty device list")
+            return emptyList()
+        }
+        
+        // Для каждого добавленного адаптера загружаем устройства
+        for (adapterId in addedAdapters) {
+            try {
+                val adapterDevices = apiService.getAdapterDevices(adapterId)
+                Log.d(TAG, "Loaded ${adapterDevices.size} devices from adapter: $adapterId")
+                
+                // Фильтруем устройства - оставляем только те, что добавлены пользователем
+                val filteredDevices = if (addedDeviceIds.isNotEmpty()) {
+                    val filtered = adapterDevices.filter { it.id in addedDeviceIds }
+                    Log.d(TAG, "Filtered ${filtered.size} devices (from ${adapterDevices.size}) based on addedDeviceIds")
+                    filtered
+                } else {
+                    // Если нет deviceIds, показываем все устройства адаптера
+                    adapterDevices
+                }
+                
+                allDevices.addAll(filteredDevices)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading devices from adapter $adapterId", e)
+            }
+        }
+        
+        Log.d(TAG, "Total parsed devices from all adapters: ${allDevices.size}")
         return allDevices
     }
     
@@ -73,7 +99,8 @@ class IobrokerRepositoryImpl @Inject constructor(
         groupName: String
     ): List<Device> {
         // Получаем все объекты из группы
-        val allObjects = apiService.getObjectTree(pattern)
+        val allObjectsResponse = apiService.getObjects(pattern)
+        val allObjects = allObjectsResponse?.filterValues { it is JsonObject }?.map { (id, obj) -> obj as JsonObject } ?: emptyList()
         Log.d(TAG, "Got ${allObjects.size} objects from $pattern")
         
         // Группируем devices по базовому ID устройства
@@ -398,7 +425,8 @@ class IobrokerRepositoryImpl @Inject constructor(
         
         try {
             val channelPattern = "$deviceId.*"
-            val channelObjects = apiService.getObjectTree(channelPattern)
+            val channelObjectsResponse = apiService.getObjects(channelPattern)
+            val channelObjects = channelObjectsResponse?.filterValues { it is JsonObject }?.map { (id, obj) -> obj as JsonObject } ?: emptyList()
             
             for (channelObj in channelObjects) {
                 val channel = parseChannelSync(channelObj)
@@ -456,7 +484,8 @@ class IobrokerRepositoryImpl @Inject constructor(
     private suspend fun findStateChildSync(deviceId: String): JsonObject? {
         try {
             val statePattern = "$deviceId.0" // Typical state ID pattern
-            val stateObjects = apiService.getObjectTree(statePattern)
+            val stateObjectsResponse = apiService.getObjects(statePattern)
+            val stateObjects = stateObjectsResponse?.filterValues { it is JsonObject }?.map { (id, obj) -> obj as JsonObject } ?: emptyList()
             return stateObjects.firstOrNull()
         } catch (e: Exception) {
             return null
@@ -627,11 +656,11 @@ class IobrokerRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getAdapters(): UiState<List<JsonObject>> {
+    override suspend fun getAdapters(): UiState<List<AdapterInfo>> {
         return try {
-            Log.d(TAG, "Getting adapters from system.adapter.*...")
-            val adapters = apiService.adapterList()
-            Log.d(TAG, "Got ${adapters.size} adapters")
+            Log.d(TAG, "Getting adapters with alive status...")
+            val adapters = apiService.getAdapterList()
+            Log.d(TAG, "Got ${adapters.size} active adapters: ${adapters.map { it.id }}")
             UiState.Success(adapters)
         } catch (e: Exception) {
             Log.e(TAG, "Error getting adapters", e)
@@ -642,79 +671,12 @@ class IobrokerRepositoryImpl @Inject constructor(
     override suspend fun getDevicesFromAdapter(adapterId: String): UiState<List<Device>> {
         return try {
             Log.d(TAG, "Getting devices from adapter: $adapterId...")
-            val deviceObjects = apiService.getDevicesFromAdapter(adapterId)
-            Log.d(TAG, "Got ${deviceObjects.size} device objects from $adapterId")
-            
-            // Преобразуем JsonObject в Device
-            val devices = parseAdapterDevices(deviceObjects, adapterId)
-            Log.d(TAG, "Parsed ${devices.size} devices from adapter $adapterId")
-            
+            val devices = apiService.getAdapterDevices(adapterId)
+            Log.d(TAG, "Got ${devices.size} devices from adapter $adapterId")
             UiState.Success(devices)
         } catch (e: Exception) {
             Log.e(TAG, "Error getting devices from adapter $adapterId", e)
             UiState.Error(e.message ?: "Ошибка получения устройств из адаптера")
-        }
-    }
-    
-    /**
-     * Преобразует JsonObject устройства в Domain Model Device
-     */
-    private fun parseAdapterDevices(deviceObjects: List<JsonObject>, adapterId: String): List<Device> {
-        val devices = mutableListOf<Device>()
-        
-        for (obj in deviceObjects) {
-            try {
-                val id = obj["_id"]?.toString()?.trim('"') ?: continue
-                val common = obj["common"] as? JsonObject ?: continue
-                
-                val name = getJsonString(common, "name") ?: id.substringAfterLast(".")
-                val type = getJsonString(obj, "type") ?: "device"
-                
-                // Пропускаем не устройства
-                if (type != "device") continue
-                
-                // Определяем тип устройства
-                val deviceType = mapDeviceTypeFromName(name)
-                
-                // Получаем состояние устройства
-                val stateObj = obj["native"] as? JsonObject
-                val value = stateObj?.get("value")?.toString()?.let { parseJsonValue(it) }
-                
-                devices.add(
-                    Device(
-                        id = id,
-                        name = name,
-                        type = deviceType,
-                        controlType = ControlType.SWITCH,
-                        state = State(
-                            value = value,
-                            ack = true,
-                            timestamp = System.currentTimeMillis()
-                        ),
-                        channels = emptyList(),
-                        connectionGroup = adapterId
-                    )
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "Error parsing device object", e)
-            }
-        }
-        
-        return devices
-    }
-    
-    /**
-     * Определяет тип устройства по имени
-     */
-    private fun mapDeviceTypeFromName(name: String): Device.DeviceType {
-        val nameLower = name.lowercase()
-        return when {
-            nameLower.contains("light") || nameLower.contains("lamp") || nameLower.contains("свет") -> Device.DeviceType.LIGHT
-            nameLower.contains("socket") || nameLower.contains("розетк") || nameLower.contains("outlet") -> Device.DeviceType.SOCKET
-            nameLower.contains("sensor") || nameLower.contains("датчик") -> Device.DeviceType.SENSOR
-            nameLower.contains("thermostat") || nameLower.contains("climate") || nameLower.contains("термо") -> Device.DeviceType.THERMOSTAT
-            nameLower.contains("blind") || nameLower.contains("curtain") || nameLower.contains("штор") -> Device.DeviceType.BLIND
-            else -> Device.DeviceType.OTHER
         }
     }
 

@@ -1,11 +1,11 @@
 package com.besenok.smarthome.domain.repository
 
+import com.besenok.smarthome.domain.model.AdapterInfo
 import com.besenok.smarthome.domain.model.Device
 import com.besenok.smarthome.domain.model.Sensor
 import com.besenok.smarthome.domain.model.Scenario
 import com.besenok.smarthome.ui.common.UiState
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.serialization.json.JsonObject
 
 sealed class ConnectionState {
     object Disconnected : ConnectionState()
@@ -23,7 +23,7 @@ interface IobrokerRepository {
     suspend fun getDevice(deviceId: String): UiState<Device>
     suspend fun setState(objectId: String, value: Any, ack: Boolean = true): UiState<Unit>
 
-    suspend fun getAdapters(): UiState<List<JsonObject>>
+    suspend fun getAdapters(): UiState<List<AdapterInfo>>
     
     /**
      * Получение устройств из адаптера

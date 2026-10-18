@@ -45,6 +45,10 @@ class AppPreferencesDataSource(private val context: Context) {
 
         // Device names storage keys
         const val DEVICE_NAMES_PREFIX = "device_name_"
+        
+        // Added adapters storage
+        val ADAPTERS_LIST = stringPreferencesKey("added_adapters")
+        val DEVICE_IDS_LIST = stringPreferencesKey("added_device_ids")
 
         // Weather regions: name -> lat,lon
         val WEATHER_REGIONS = mapOf(
@@ -225,5 +229,105 @@ class AppPreferencesDataSource(private val context: Context) {
      */
     suspend fun deleteDeviceName(deviceId: String) {
         saveDeviceName(deviceId, null)
+    }
+
+    // ========== Added Adapters Storage ==========
+
+    /**
+     * Сохраняет список deviceIds добавленных устройств (через ", ")
+     * @param deviceIds Список ID устройств
+     */
+    suspend fun saveAddedDeviceIds(deviceIds: List<String>) {
+        context.dataStore.edit { preferences ->
+            if (deviceIds.isNotEmpty()) {
+                preferences[DEVICE_IDS_LIST] = deviceIds.joinToString(", ")
+            } else {
+                preferences.remove(DEVICE_IDS_LIST)
+            }
+        }
+    }
+
+    /**
+     * Получает список добавленных deviceIds
+     * @return Список deviceId
+     */
+    suspend fun getAddedDeviceIds(): List<String> {
+        val prefs = context.dataStore.data.first()
+        val deviceIdsStr = prefs[DEVICE_IDS_LIST]
+        return if (!deviceIdsStr.isNullOrBlank()) {
+            deviceIdsStr.split(", ").filter { it.isNotBlank() }
+        } else {
+            emptyList()
+        }
+    }
+
+    /**
+     * Добавляет device в список добавленных
+     * @param deviceId ID устройства
+     */
+    suspend fun addDeviceToList(deviceId: String) {
+        val currentList = getAddedDeviceIds()
+        if (!currentList.contains(deviceId)) {
+            saveAddedDeviceIds(currentList + deviceId)
+        }
+    }
+
+    /**
+     * Удаляет device из списка добавленных
+     * @param deviceId ID устройства
+     */
+    suspend fun removeDeviceFromList(deviceId: String) {
+        val currentList = getAddedDeviceIds()
+        val newList = currentList.filter { it != deviceId }
+        saveAddedDeviceIds(newList)
+    }
+
+    /**
+     * Сохраняет список adapterId добавленных адаптеров (через ", ")
+     * @param adapterIds Список ID адаптеров (например, "mqtt.0, mihome.0")
+     */
+    suspend fun saveAddedAdapters(adapterIds: List<String>) {
+        context.dataStore.edit { preferences ->
+            if (adapterIds.isNotEmpty()) {
+                preferences[ADAPTERS_LIST] = adapterIds.joinToString(", ")
+            } else {
+                preferences.remove(ADAPTERS_LIST)
+            }
+        }
+    }
+
+    /**
+     * Получает список добавленных адаптеров
+     * @return Список adapterId
+     */
+    suspend fun getAddedAdapterIds(): List<String> {
+        val prefs = context.dataStore.data.first()
+        val adaptersStr = prefs[ADAPTERS_LIST]
+        return if (!adaptersStr.isNullOrBlank()) {
+            adaptersStr.split(", ").filter { it.isNotBlank() }
+        } else {
+            emptyList()
+        }
+    }
+
+    /**
+     * Добавляет адаптер в список добавленных
+     * @param adapterId ID адаптера
+     */
+    suspend fun addAdapterToList(adapterId: String) {
+        val currentList = getAddedAdapterIds()
+        if (!currentList.contains(adapterId)) {
+            saveAddedAdapters(currentList + adapterId)
+        }
+    }
+
+    /**
+     * Удаляет адаптер из списка добавленных
+     * @param adapterId ID адаптера
+     */
+    suspend fun removeAdapterFromList(adapterId: String) {
+        val currentList = getAddedAdapterIds()
+        val newList = currentList.filter { it != adapterId }
+        saveAddedAdapters(newList)
     }
 }

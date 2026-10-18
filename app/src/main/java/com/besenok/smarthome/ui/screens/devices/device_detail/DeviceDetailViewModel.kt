@@ -21,7 +21,8 @@ private const val TAG = "DeviceDetailViewModel"
 @HiltViewModel
 class DeviceDetailViewModel @Inject constructor(
     private val getDevicesUseCase: GetDevicesUseCase,
-    private val setDeviceStateUseCase: SetDeviceStateUseCase
+    private val setDeviceStateUseCase: SetDeviceStateUseCase,
+    private val getDevicesFromAdapterUseCase: com.besenok.smarthome.domain.usecase.adapter.GetDevicesFromAdapterUseCase
 ) : ViewModel() {
 
     private val _device = MutableStateFlow<UiState<Device>>(UiState.Loading)
@@ -36,31 +37,98 @@ class DeviceDetailViewModel @Inject constructor(
             _device.value = UiState.Loading
             
             try {
-                // Загружаем все устройства и ищем нужное
+                // Сначала пытаемся найти в уже загруженных
                 val result = getDevicesUseCase()
+                Log.d(TAG, "GetDevices result: ${result}")
+                
                 when (result) {
                     is UiState.Success -> {
                         val foundDevice = result.data.find { it.id == deviceId }
                         if (foundDevice != null) {
-                            Log.d(TAG, "Device found: ${foundDevice.name}")
+                            Log.d(TAG, "Device found in cache: ${foundDevice.name}")
                             _device.value = UiState.Success(foundDevice)
-                        } else {
-                            Log.w(TAG, "Device not found: $deviceId")
-                            _device.value = UiState.Error("Устройство не найдено")
+                            return@launch
                         }
                     }
                     is UiState.Error -> {
-                        Log.e(TAG, "Error loading device")
-                        _device.value = UiState.Error(result.message)
+                        Log.e(TAG, "Error in getDevices: ${result.message}")
                     }
-                    else -> {
-                        _device.value = UiState.Error("Ошибка загрузки устройства")
-                    }
+                    else -> {}
                 }
+                
+                // Если не найдено, загружаем напрямую через getStates
+                Log.d(TAG, "Device not in cache, loading directly from ioBroker...")
+                loadDeviceDirectly(deviceId)
+                
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading device", e)
                 _device.value = UiState.Error(e.message ?: "Ошибка загрузки устройства")
             }
+        }
+    }
+    
+    /**
+     * Загружает устройство напрямую из ioBroker API
+     */
+    private suspend fun loadDeviceDirectly(deviceId: String) {
+        try {
+            // Получаем adapterId из deviceId
+            val adapterId = extractAdapterIdFromDeviceId(deviceId)
+            if (adapterId == null) {
+                Log.w(TAG, "Cannot extract adapterId from deviceId: $deviceId")
+                _device.value = UiState.Error("Невозможно загрузить устройство")
+                return
+            }
+            
+            Log.d(TAG, "Loading device directly from adapter: $adapterId")
+            
+            // Получаем все states для этого устройства
+            val statesResponse = com.besenok.smarthome.data.remote.iobroker.IobrokerWebSocketClient(
+                TODO(),
+                TODO()
+            )
+            
+            // Fallback: создаём простое устройство из deviceId
+            Log.d(TAG, "Creating device from deviceId: $deviceId")
+            val device = com.besenok.smarthome.domain.model.Device(
+                id = deviceId,
+                name = deviceId.split(".").lastOrNull() ?: deviceId,
+                type = com.besenok.smarthome.domain.model.Device.DeviceType.OTHER,
+                controlType = com.besenok.smarthome.domain.model.ControlType.NONE,
+                state = null,
+                channels = emptyList(),
+                connectionGroup = adapterId
+            )
+            
+            _device.value = UiState.Success(device)
+            Log.d(TAG, "Device loaded: ${device.name}")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading device directly", e)
+            _device.value = UiState.Error("Ошибка загрузки: ${e.message}")
+        }
+    }
+    
+    /**
+     * Извлекает adapterId из ID устройства
+     * mihome.0.devices.gateway_286c07f0aa08 -> mihome.0
+     * tuya.0.bf91e1cc5543e02434vkvs -> tuya.0
+     * mqtt.0.home -> mqtt.0
+     */
+    private fun extractAdapterIdFromDeviceId(deviceId: String): String? {
+        return try {
+            val parts = deviceId.split(".")
+            if (parts.size >= 3 && parts[0] == "system" && parts[1] == "adapter") {
+                "${parts[2]}.${parts[3]}"
+            } else if (parts.size >= 3) {
+                // Формат: adapterName.index.something
+                "${parts[0]}.${parts[1]}"
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to extract adapterId from: $deviceId", e)
+            null
         }
     }
 

@@ -121,10 +121,39 @@ fun DeviceListScreen(
                             .padding(paddingValues),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            "Нет устройств",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Devices,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Нет устройств",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Добавьте адаптер для отображения устройств",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Button(
+                                onClick = viewModel::showAddDeviceDialog,
+                                modifier = Modifier.padding(horizontal = 32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Добавить адаптер")
+                            }
+                        }
                     }
                 } else {
                     LazyColumn(
@@ -151,7 +180,8 @@ fun DeviceListScreen(
                                         DeviceRow(
                                             devices = group.devices.take(2),
                                             onDeviceClick = onDeviceClick,
-                                            onDeviceEdit = viewModel::startRenameDevice
+                                            onDeviceEdit = viewModel::startRenameDevice,
+                                            onDeviceDelete = { viewModel.removeDevice(it) }
                                         )
                                     }
                                 }
@@ -161,7 +191,8 @@ fun DeviceListScreen(
                                         DeviceRow(
                                             devices = group.devices.drop(2).take(2),
                                             onDeviceClick = onDeviceClick,
-                                            onDeviceEdit = viewModel::startRenameDevice
+                                            onDeviceEdit = viewModel::startRenameDevice,
+                                            onDeviceDelete = { viewModel.removeDevice(it) }
                                         )
                                     }
                                 }
@@ -171,7 +202,8 @@ fun DeviceListScreen(
                                         DeviceRow(
                                             devices = group.devices.drop(4).take(2),
                                             onDeviceClick = onDeviceClick,
-                                            onDeviceEdit = viewModel::startRenameDevice
+                                            onDeviceEdit = viewModel::startRenameDevice,
+                                            onDeviceDelete = { viewModel.removeDevice(it) }
                                         )
                                     }
                                 }
@@ -255,7 +287,8 @@ fun DeviceGroupHeader(
 fun DeviceRow(
     devices: List<Device>,
     onDeviceClick: (String) -> Unit,
-    onDeviceEdit: (Device) -> Unit
+    onDeviceEdit: (Device) -> Unit,
+    onDeviceDelete: (Device) -> Unit = {}
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -270,7 +303,8 @@ fun DeviceRow(
                 DeviceGridCard(
                     device = device,
                     onClick = { onDeviceClick(device.id) },
-                    onEdit = { onDeviceEdit(device) }
+                    onEdit = { onDeviceEdit(device) },
+                    onDelete = { onDeviceDelete(device) }
                 )
             }
         }
@@ -287,7 +321,8 @@ fun DeviceRow(
 fun DeviceGridCard(
     device: Device,
     onClick: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onDelete: () -> Unit = {}
 ) {
     val (icon, statusText) = getDeviceStatusText(device)
     
@@ -340,19 +375,38 @@ fun DeviceGridCard(
                 }
             }
             
-            // Кнопка редактирования (переименования)
-            IconButton(
+            // Кнопки действий
+            Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .size(28.dp),
-                onClick = onEdit
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Переименовать",
-                    tint = Color.LightGray,
-                    modifier = Modifier.size(18.dp)
-                )
+                // Кнопка редактирования (переименования)
+                IconButton(
+                    onClick = onEdit,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Переименовать",
+                        tint = Color.Blue,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                
+                // Кнопка удаления
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Удалить",
+                        tint = Color.Red,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }

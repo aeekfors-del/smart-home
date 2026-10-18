@@ -3,6 +3,8 @@ package com.besenok.smarthome.ui.screens.devices
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.besenok.smarthome.data.local.datastore.AppPreferencesDataSource
+import com.besenok.smarthome.domain.model.AdapterInfo
 import com.besenok.smarthome.domain.model.Device
 import com.besenok.smarthome.domain.usecase.adapter.GetAdaptersUseCase
 import com.besenok.smarthome.domain.usecase.adapter.GetDevicesFromAdapterUseCase
@@ -15,7 +17,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonObject
 import javax.inject.Inject
 
 private const val TAG = "DeviceListViewModel"
@@ -26,7 +27,8 @@ class DeviceListViewModel @Inject constructor(
     private val renameDeviceUseCase: RenameDeviceUseCase,
     private val applyDeviceNamesUseCase: ApplyDeviceNamesUseCase,
     private val getAdaptersUseCase: GetAdaptersUseCase,
-    private val getDevicesFromAdapterUseCase: GetDevicesFromAdapterUseCase
+    private val getDevicesFromAdapterUseCase: GetDevicesFromAdapterUseCase,
+    private val settingsDataSource: AppPreferencesDataSource
 ) : ViewModel() {
 
     private val _devices = MutableStateFlow<UiState<List<Device>>>(UiState.Loading)
@@ -46,8 +48,8 @@ class DeviceListViewModel @Inject constructor(
     private val _showAddDeviceDialog = MutableStateFlow(false)
     val showAddDeviceDialog: StateFlow<Boolean> = _showAddDeviceDialog.asStateFlow()
     
-    private val _adaptersState = MutableStateFlow<UiState<List<JsonObject>>>(UiState.Loading)
-    val adaptersState: StateFlow<UiState<List<JsonObject>>> = _adaptersState.asStateFlow()
+    private val _adaptersState = MutableStateFlow<UiState<List<AdapterInfo>>>(UiState.Loading)
+    val adaptersState: StateFlow<UiState<List<AdapterInfo>>> = _adaptersState.asStateFlow()
     
     private val _selectedAdapterId = MutableStateFlow<String?>(null)
     val selectedAdapterId: StateFlow<String?> = _selectedAdapterId.asStateFlow()
@@ -59,7 +61,19 @@ class DeviceListViewModel @Inject constructor(
     val addedDeviceIds: StateFlow<MutableSet<String>> = _addedDeviceIds.asStateFlow()
 
     init {
-        loadDevices()
+        // Загружаем устройства из сохранённых адаптеров
+        viewModelScope.launch {
+            val addedAdapters = settingsDataSource.getAddedAdapterIds()
+            Log.d(TAG, "ViewModel init: loaded ${addedAdapters.size} adapters from DataStore")
+            if (addedAdapters.isNotEmpty()) {
+                loadDevices()
+            } else {
+                Log.d(TAG, "No adapters added yet, showing empty state")
+                // Устанавливаем пустой список вместо Loading
+                _devices.value = UiState.Success(emptyList())
+                _groups.value = emptyList()
+            }
+        }
     }
 
     fun loadDevices() {
@@ -176,18 +190,47 @@ class DeviceListViewModel @Inject constructor(
             return
         }
         
-        // Устройства из адаптера уже имеют правильные ID и данные
-        // Просто перезагружаем общий список устройств
-        // Новые устройства автоматически появятся при следующей загрузке
-        // из ioBroker, так как они будут в adapter.
+        viewModelScope.launch {
+            // Сохраняем deviceIds каждого добавленного устройства
+            for (device in devices) {
+                settingsDataSource.addDeviceToList(device.id)
+                Log.d(TAG, "Saved device ${device.id} to DataStore")
+            }
+            
+            // Также сохраняем adapterId для загрузки всех устройств адаптера
+            val adapterId = devices.firstOrNull()?.connectionGroup
+            if (adapterId != null) {
+                settingsDataSource.addAdapterToList(adapterId)
+                Log.d(TAG, "Saved adapter $adapterId to DataStore")
+            }
+            
+            // Скрываем диалог
+            hideAddDeviceDialog()
+            
+            // Перезагружаем устройства
+            loadDevices()
+            
+            Log.d(TAG, "Devices added successfully")
+        }
+    }
+    
+    fun removeDevice(device: Device) {
+        Log.d(TAG, "Removing device: ${device.id} from ${device.connectionGroup}")
         
-        // Скрываем диалог
-        hideAddDeviceDialog()
-        
-        // Перезагружаем устройства
-        loadDevices()
-        
-        Log.d(TAG, "Devices addition initiated, will be visible after reload")
+        viewModelScope.launch {
+            try {
+                // Удаляем device из списка добавленных
+                settingsDataSource.removeDeviceFromList(device.id)
+                Log.d(TAG, "Removed device ${device.id} from DataStore")
+                
+                // Перезагружаем устройства
+                loadDevices()
+                
+                Log.d(TAG, "Device removed successfully")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error removing device", e)
+            }
+        }
     }
     
     fun loadAdapters() {
