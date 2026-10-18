@@ -89,6 +89,36 @@ class IobrokerApiService @Inject constructor(
     }
 
     suspend fun adapterList(): List<JsonObject> {
+        Log.d(TAG, "Getting adapter list from system.adapter.*")
+        return getObjectTree("system.adapter.*")
+    }
+
+    /**
+     * Получение устройств из адаптера
+     * @param adapterId ID адаптера (например, "mihome.0", "tuya.0")
+     * @return Список устройств адаптера
+     */
+    suspend fun getDevicesFromAdapter(adapterId: String): List<JsonObject> {
+        Log.d(TAG, "Getting devices from adapter: $adapterId")
+        // Пробуем несколько возможных паттернов для получения устройств
+        val patterns = listOf(
+            "$adapterId.devices.*",
+            "system.adapter.$adapterId.devices.*",
+            "$adapterId.*",
+            "system.adapter.$adapterId.*"
+        )
+        
+        for (pattern in patterns) {
+            Log.d(TAG, "Trying pattern: $pattern")
+            val result = getObjectTree(pattern)
+            Log.d(TAG, "Pattern $pattern returned ${result.size} objects")
+            if (result.isNotEmpty()) {
+                Log.d(TAG, "First object: ${result.firstOrNull()}")
+                return result
+            }
+        }
+        
+        Log.w(TAG, "No devices found with any pattern for adapter $adapterId")
         return emptyList()
     }
 

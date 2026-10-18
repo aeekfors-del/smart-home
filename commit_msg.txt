@@ -1,0 +1,21 @@
+v0.2 - Add device management from ioBroker adapters
+
+Features:
+- Add devices from ioBroker adapters (mihome, tuya, etc.)
+- Rename devices with custom names stored in DataStore
+- Adapter activity indicator (green/gray)
+- Selected adapter visual highlighting
+- Device selection dialog with checkboxes
+
+Architecture:
+- MVVM + Hilt DI
+- UseCases in domain layer
+- GetAdaptersUseCase for adapter list
+- GetDevicesFromAdapterUseCase for device loading
+- RenameDeviceUseCase for custom naming
+
+UI:
+- Jetpack Compose only (no XML)
+- DeviceListScreen with tabs and groups
+- AddDeviceDialog with adapter/device selection
+- RenameDeviceDialog for renaming

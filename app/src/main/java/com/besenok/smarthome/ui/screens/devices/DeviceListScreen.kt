@@ -37,6 +37,11 @@ fun DeviceListScreen(
     val devicesState by viewModel.devices.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val editingDevice by viewModel.editingDevice.collectAsState()
+    val showAddDevice by viewModel.showAddDeviceDialog.collectAsState()
+    val adaptersState by viewModel.adaptersState.collectAsState()
+    val devicesFromAdapter by viewModel.devicesFromAdapter.collectAsState()
+    val addedDeviceIds by viewModel.addedDeviceIds.collectAsState()
+    val selectedAdapterId by viewModel.selectedAdapterId.collectAsState()
 
     val filters = listOf(
         DeviceListViewModel.DeviceFilter.ALL to "Все",
@@ -53,10 +58,37 @@ fun DeviceListScreen(
             onConfirm = viewModel::confirmRenameDevice
         )
     }
+    
+    // Диалог добавления устройства
+    if (showAddDevice) {
+        AddDeviceDialog(
+            onDismiss = viewModel::hideAddDeviceDialog,
+            adaptersState = adaptersState,
+            devicesState = devicesFromAdapter,
+            onAddDevices = viewModel::addSelectedDevices,
+            onSelectedDevicesChanged = { devices ->
+                // Можно использовать для отслеживания выбранных устройств
+            },
+            selectedAdapterId = selectedAdapterId,
+            onAdapterSelected = { adapterId ->
+                viewModel.loadDevicesFromAdapter(adapterId)
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Устройства") })
+            TopAppBar(
+                title = { Text("Устройства") },
+                actions = {
+                    IconButton(onClick = viewModel::showAddDeviceDialog) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Добавить устройство"
+                        )
+                    }
+                }
+            )
         },
         bottomBar = {
             TabRow(selectedTabIndex = selectedFilter.ordinal) {

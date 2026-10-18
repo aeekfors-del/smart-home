@@ -627,6 +627,97 @@ class IobrokerRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getAdapters(): UiState<List<JsonObject>> {
+        return try {
+            Log.d(TAG, "Getting adapters from system.adapter.*...")
+            val adapters = apiService.adapterList()
+            Log.d(TAG, "Got ${adapters.size} adapters")
+            UiState.Success(adapters)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting adapters", e)
+            UiState.Error(e.message ?: "Ошибка получения адаптеров")
+        }
+    }
+
+    override suspend fun getDevicesFromAdapter(adapterId: String): UiState<List<Device>> {
+        return try {
+            Log.d(TAG, "Getting devices from adapter: $adapterId...")
+            val deviceObjects = apiService.getDevicesFromAdapter(adapterId)
+            Log.d(TAG, "Got ${deviceObjects.size} device objects from $adapterId")
+            
+            // Преобразуем JsonObject в Device
+            val devices = parseAdapterDevices(deviceObjects, adapterId)
+            Log.d(TAG, "Parsed ${devices.size} devices from adapter $adapterId")
+            
+            UiState.Success(devices)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting devices from adapter $adapterId", e)
+            UiState.Error(e.message ?: "Ошибка получения устройств из адаптера")
+        }
+    }
+    
+    /**
+     * Преобразует JsonObject устройства в Domain Model Device
+     */
+    private fun parseAdapterDevices(deviceObjects: List<JsonObject>, adapterId: String): List<Device> {
+        val devices = mutableListOf<Device>()
+        
+        for (obj in deviceObjects) {
+            try {
+                val id = obj["_id"]?.toString()?.trim('"') ?: continue
+                val common = obj["common"] as? JsonObject ?: continue
+                
+                val name = getJsonString(common, "name") ?: id.substringAfterLast(".")
+                val type = getJsonString(obj, "type") ?: "device"
+                
+                // Пропускаем не устройства
+                if (type != "device") continue
+                
+                // Определяем тип устройства
+                val deviceType = mapDeviceTypeFromName(name)
+                
+                // Получаем состояние устройства
+                val stateObj = obj["native"] as? JsonObject
+                val value = stateObj?.get("value")?.toString()?.let { parseJsonValue(it) }
+                
+                devices.add(
+                    Device(
+                        id = id,
+                        name = name,
+                        type = deviceType,
+                        controlType = ControlType.SWITCH,
+                        state = State(
+                            value = value,
+                            ack = true,
+                            timestamp = System.currentTimeMillis()
+                        ),
+                        channels = emptyList(),
+                        connectionGroup = adapterId
+                    )
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Error parsing device object", e)
+            }
+        }
+        
+        return devices
+    }
+    
+    /**
+     * Определяет тип устройства по имени
+     */
+    private fun mapDeviceTypeFromName(name: String): Device.DeviceType {
+        val nameLower = name.lowercase()
+        return when {
+            nameLower.contains("light") || nameLower.contains("lamp") || nameLower.contains("свет") -> Device.DeviceType.LIGHT
+            nameLower.contains("socket") || nameLower.contains("розетк") || nameLower.contains("outlet") -> Device.DeviceType.SOCKET
+            nameLower.contains("sensor") || nameLower.contains("датчик") -> Device.DeviceType.SENSOR
+            nameLower.contains("thermostat") || nameLower.contains("climate") || nameLower.contains("термо") -> Device.DeviceType.THERMOSTAT
+            nameLower.contains("blind") || nameLower.contains("curtain") || nameLower.contains("штор") -> Device.DeviceType.BLIND
+            else -> Device.DeviceType.OTHER
+        }
+    }
+
     override suspend fun getSensors(): UiState<List<Sensor>> {
         return try {
             // Получаем все state объекты из mihome.0

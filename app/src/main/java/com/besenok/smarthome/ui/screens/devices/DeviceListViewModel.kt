@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.besenok.smarthome.domain.model.Device
+import com.besenok.smarthome.domain.usecase.adapter.GetAdaptersUseCase
+import com.besenok.smarthome.domain.usecase.adapter.GetDevicesFromAdapterUseCase
 import com.besenok.smarthome.domain.usecase.device.ApplyDeviceNamesUseCase
 import com.besenok.smarthome.domain.usecase.device.GetDevicesUseCase
 import com.besenok.smarthome.domain.usecase.device.RenameDeviceUseCase
@@ -13,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 import javax.inject.Inject
 
 private const val TAG = "DeviceListViewModel"
@@ -21,7 +24,9 @@ private const val TAG = "DeviceListViewModel"
 class DeviceListViewModel @Inject constructor(
     private val getDevicesUseCase: GetDevicesUseCase,
     private val renameDeviceUseCase: RenameDeviceUseCase,
-    private val applyDeviceNamesUseCase: ApplyDeviceNamesUseCase
+    private val applyDeviceNamesUseCase: ApplyDeviceNamesUseCase,
+    private val getAdaptersUseCase: GetAdaptersUseCase,
+    private val getDevicesFromAdapterUseCase: GetDevicesFromAdapterUseCase
 ) : ViewModel() {
 
     private val _devices = MutableStateFlow<UiState<List<Device>>>(UiState.Loading)
@@ -36,6 +41,22 @@ class DeviceListViewModel @Inject constructor(
     // Состояние для диалога переименования
     private val _editingDevice = MutableStateFlow<Device?>(null)
     val editingDevice: StateFlow<Device?> = _editingDevice.asStateFlow()
+    
+    // Состояние для диалога добавления устройства
+    private val _showAddDeviceDialog = MutableStateFlow(false)
+    val showAddDeviceDialog: StateFlow<Boolean> = _showAddDeviceDialog.asStateFlow()
+    
+    private val _adaptersState = MutableStateFlow<UiState<List<JsonObject>>>(UiState.Loading)
+    val adaptersState: StateFlow<UiState<List<JsonObject>>> = _adaptersState.asStateFlow()
+    
+    private val _selectedAdapterId = MutableStateFlow<String?>(null)
+    val selectedAdapterId: StateFlow<String?> = _selectedAdapterId.asStateFlow()
+    
+    private val _devicesFromAdapter = MutableStateFlow<UiState<List<Device>>>(UiState.Success(emptyList()))
+    val devicesFromAdapter: StateFlow<UiState<List<Device>>> = _devicesFromAdapter.asStateFlow()
+    
+    private val _addedDeviceIds = MutableStateFlow<MutableSet<String>>(mutableSetOf())
+    val addedDeviceIds: StateFlow<MutableSet<String>> = _addedDeviceIds.asStateFlow()
 
     init {
         loadDevices()
@@ -112,6 +133,76 @@ class DeviceListViewModel @Inject constructor(
         _editingDevice.value = null
         Log.d(TAG, "Cancel rename device")
     }
+    
+    // Методы для добавления устройства
+    fun showAddDeviceDialog() {
+        _showAddDeviceDialog.value = true
+        _devicesFromAdapter.value = UiState.Success(emptyList())
+        _addedDeviceIds.value = mutableSetOf()
+        loadAdapters()
+        Log.d(TAG, "Show add device dialog")
+    }
+    
+    fun hideAddDeviceDialog() {
+        _showAddDeviceDialog.value = false
+        Log.d(TAG, "Hide add device dialog")
+    }
+    
+    fun loadDevicesFromAdapter(adapterId: String) {
+        Log.d(TAG, "loadDevicesFromAdapter called with: $adapterId")
+        _selectedAdapterId.value = adapterId
+        _devicesFromAdapter.value = UiState.Loading
+        viewModelScope.launch {
+            Log.d(TAG, "Loading devices from adapter: $adapterId")
+            try {
+                val result = getDevicesFromAdapterUseCase(adapterId)
+                _devicesFromAdapter.value = result
+                val deviceCount = when (result) {
+                    is UiState.Success -> result.data?.size ?: 0
+                    else -> 0
+                }
+                Log.d(TAG, "Loaded $deviceCount devices from adapter $adapterId")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading devices from adapter", e)
+                _devicesFromAdapter.value = UiState.Error(e.message ?: "Ошибка загрузки устройств")
+            }
+        }
+    }
+    
+    fun addSelectedDevices(devices: List<Device>) {
+        Log.d(TAG, "Adding ${devices.size} devices from adapter")
+        if (devices.isEmpty()) {
+            Log.w(TAG, "No devices selected to add")
+            return
+        }
+        
+        // Устройства из адаптера уже имеют правильные ID и данные
+        // Просто перезагружаем общий список устройств
+        // Новые устройства автоматически появятся при следующей загрузке
+        // из ioBroker, так как они будут в adapter.
+        
+        // Скрываем диалог
+        hideAddDeviceDialog()
+        
+        // Перезагружаем устройства
+        loadDevices()
+        
+        Log.d(TAG, "Devices addition initiated, will be visible after reload")
+    }
+    
+    fun loadAdapters() {
+        viewModelScope.launch {
+            Log.d(TAG, "Loading adapters...")
+            try {
+                val result = getAdaptersUseCase()
+                _adaptersState.value = result
+                Log.d(TAG, "Adapters loaded: ${result}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading adapters", e)
+                _adaptersState.value = UiState.Error(e.message ?: "Ошибка загрузки адаптеров")
+            }
+        }
+    }
 
     private fun groupDevicesByConnection(
         uiState: UiState<List<Device>>
@@ -141,7 +232,7 @@ class DeviceListViewModel @Inject constructor(
                     id = groupId,
                     name = groupName,
                     devices = devices,
-                    isExpanded = true
+                    isExpanded = false  // Группы свёрнуты по умолчанию
                 )
             }
             .sortedBy { it.id } // mihome.0 будет первым

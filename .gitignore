@@ -21,8 +21,14 @@ local.properties
 /cl
 /gradle/wrapper/gradle-wrapper.jar
 
-# Log
+# Log files
 *.log
+app_log.txt
+crash_log.txt
+crash_only.txt
+device_log.txt
+tuya_log.txt
+test.txt
 
 # Maven
 /target

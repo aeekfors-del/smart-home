@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.json.JsonObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -156,6 +157,34 @@ class IobrokerRepositoryMock @Inject constructor(
         // Mock — просто успешный ответ
         delay(200)
         return UiState.Success(Unit)
+    }
+
+    override suspend fun getAdapters(): UiState<List<JsonObject>> {
+        // Mock - возвращаем пустой список адаптеров
+        delay(300)
+        return UiState.Success(emptyList())
+    }
+
+    override suspend fun getDevicesFromAdapter(adapterId: String): UiState<List<Device>> {
+        // Mock - возвращаем тестовые устройства
+        delay(500)
+        val mockDevices = listOf(
+            Device(
+                id = "mock.$adapterId.device.1",
+                name = "Устройство 1 из $adapterId",
+                type = Device.DeviceType.LIGHT,
+                controlType = ControlType.SWITCH,
+                state = com.besenok.smarthome.domain.model.State(value = true, ack = false, timestamp = System.currentTimeMillis())
+            ),
+            Device(
+                id = "mock.$adapterId.device.2",
+                name = "Устройство 2 из $adapterId",
+                type = Device.DeviceType.SOCKET,
+                controlType = ControlType.SWITCH,
+                state = com.besenok.smarthome.domain.model.State(value = false, ack = false, timestamp = System.currentTimeMillis())
+            )
+        )
+        return UiState.Success(mockDevices)
     }
 
     override suspend fun getSensors(): UiState<List<Sensor>> {

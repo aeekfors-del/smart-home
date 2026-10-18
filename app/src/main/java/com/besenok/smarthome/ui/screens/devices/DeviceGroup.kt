@@ -9,7 +9,7 @@ data class DeviceGroup(
     val id: String,
     val name: String,
     val devices: List<Device>,
-    val isExpanded: Boolean = true
+    val isExpanded: Boolean = false
 ) {
     val deviceCount: Int get() = devices.size
 }
