@@ -194,45 +194,134 @@ fun ForecastRow(forecastList: List<WeatherInfo.ForecastEntry>) {
 fun ForecastDayCardCompact(entry: WeatherInfo.ForecastEntry) {
     val weatherIcon = getWeatherIcon(entry.iconCode)
     
-    // Фиксированный размер карточки (увеличено в 1.5 раза: 80*1.5=120, 120*1.5=180)
-    Box(
+    // Карточка с полной информацией о погоде
+    Card(
         modifier = Modifier
-            .width(120.dp)
-            .height(180.dp),
-        contentAlignment = Alignment.Center
+            .fillMaxWidth()
+            .padding(4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
     ) {
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween
+            // Строка 1: День недели + иконка
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // День недели
                 Text(
-                    entry.dayName.take(3),
+                    entry.dayName,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                
-                // Иконка погоды (увеличена)
+                Text(weatherIcon, style = MaterialTheme.typography.headlineSmall)
+            }
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            // Строка 2: Температура (основная)
+            Text(
+                String.format("%.0f°", entry.temperature),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            
+            Spacer(modifier = Modifier.height(2.dp))
+            
+            // Строка 3: Min/Max температура
+            Text(
+                String.format("↓%.0f° ↑%.0f°", entry.tempMin, entry.tempMax),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Spacer(modifier = Modifier.height(2.dp))
+            
+            // Строка 4: Ощущается как
+            Text(
+                String.format("Ощущается: %.0f°", entry.feelsLike),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            // Разделитель
+            HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+            
+            // Строка 5: Влажность + Давление
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row {
+                    Text("💧", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        " ${entry.humidity}%",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Row {
+                    Text("🌡️", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        " ${entry.pressure} мм",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(2.dp))
+            
+            // Строка 6: Ветер
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text(
-                    weatherIcon,
-                    style = MaterialTheme.typography.displayLarge
+                    "💨 ${String.format("%.1f}", entry.windSpeed)} м/с",
+                    style = MaterialTheme.typography.bodySmall
                 )
-                
-                // Температура (увеличена)
+                if (entry.windGust > 0.5) {
+                    Text(
+                        "🌬️ ${String.format("%.1f}", entry.windGust)} м/с",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(2.dp))
+            
+            // Строка 7: Облачность + Вероятность осадков
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text(
-                    String.format("%.0f°", entry.temperature),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
+                    String.format("☁️ %.0f%%", entry.cloudiness),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                if (entry.precipitationProbability > 0.05) {
+                    Text(
+                        String.format("🌧️ %.0f%%", entry.precipitationProbability * 100),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            
+            // Видимость (если > 0)
+            if (entry.visibility > 0) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    String.format("👁️ %.1f км", entry.visibility / 1000.0),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

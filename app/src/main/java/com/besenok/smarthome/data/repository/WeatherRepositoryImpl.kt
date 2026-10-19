@@ -98,16 +98,45 @@ class WeatherRepositoryImpl @Inject constructor(
             }
         }
         
-        // Преобразуем в ForecastEntry
+        // Преобразуем в ForecastEntry с полным парсингом всех полей
         return dayMap.values.mapNotNull { item ->
             val main = item.main ?: return@mapNotNull null
             val weatherItem = item.weather?.firstOrNull() ?: return@mapNotNull null
+            val wind = item.wind
+            val cloud = item.cloud
+            
+            // Конвертация давления из hPa в мм рт. ст.
+            val pressureMm = (main.pressure ?: 0) * 3 / 4
             
             WeatherInfo.ForecastEntry(
                 timestamp = item.dt?.toLong() ?: 0,
+                
+                // Temperature
                 temperature = main.temp ?: 0.0,
+                feelsLike = main.feels_like ?: main.temp ?: 0.0,
+                tempMin = main.temp_min ?: main.temp ?: 0.0,
+                tempMax = main.temp_max ?: main.temp ?: 0.0,
+                humidity = main.humidity ?: 0,
+                pressure = pressureMm,
+                
+                // Weather condition
                 condition = weatherItem.main ?: "Неизвестно",
-                iconCode = weatherItem.icon ?: "01d"
+                description = weatherItem.description ?: "",
+                iconCode = weatherItem.icon ?: "01d",
+                
+                // Wind
+                windSpeed = wind?.speed ?: 0.0,
+                windDeg = wind?.deg ?: 0,
+                windGust = wind?.gust ?: 0.0,
+                
+                // Clouds
+                cloudiness = cloud?.all ?: 0,
+                
+                // Precipitation
+                precipitationProbability = item.pop ?: 0.0,
+                
+                // Visibility
+                visibility = item.visibility ?: 0
             )
         }
     }

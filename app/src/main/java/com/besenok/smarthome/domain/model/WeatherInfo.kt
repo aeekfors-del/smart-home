@@ -18,10 +18,37 @@ data class WeatherInfo(
     val forecast: List<ForecastEntry>
 ) {
     data class ForecastEntry(
+        // Timestamp
         val timestamp: Long,
+        
+        // Temperature (Main)
         val temperature: Double,
+        val feelsLike: Double,
+        val tempMin: Double,
+        val tempMax: Double,
+        val humidity: Int,
+        val pressure: Int,
+        
+        // Weather condition
         val condition: String,
+        val description: String,
         val iconCode: String,
+        
+        // Wind
+        val windSpeed: Double,
+        val windDeg: Int,
+        val windGust: Double,
+        
+        // Clouds
+        val cloudiness: Int,
+        
+        // Precipitation
+        val precipitationProbability: Double,
+        
+        // Visibility
+        val visibility: Int,
+        
+        // Day name
         val dayName: String = getDayName(timestamp)
     ) {
         companion object {
