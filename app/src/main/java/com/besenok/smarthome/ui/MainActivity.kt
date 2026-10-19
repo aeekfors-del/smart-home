@@ -14,6 +14,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.besenok.smarthome.ui.navigation.Screen
 import com.besenok.smarthome.ui.navigation.SmartHomeNavGraph
+import com.besenok.smarthome.ui.splash.SplashScreen
 import com.besenok.smarthome.ui.theme.SmartHomeTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -27,43 +28,53 @@ class MainActivity : ComponentActivity() {
         setContent {
             SmartHomeTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    val navController = rememberNavController()
-                    var selectedTab by remember { mutableIntStateOf(0) }
-                    val tabs = listOf(
-                        TabItem(Screen.Dashboard.route, "Главная", Icons.Default.Home),
-                        TabItem(Screen.Devices.route, "Устройства", Icons.Default.Build),
-                        TabItem(Screen.Sensors.route, "Мониторинг", Icons.Default.Info),
-                        TabItem(Screen.Scenarios.route, "Сценарии", Icons.Default.List),
-                        TabItem(Screen.Settings.route, "Настройки", Icons.Default.Settings)
-                    )
+                    var showSplash by remember { mutableStateOf(true) }
+                    
+                    if (showSplash) {
+                        SplashScreen(
+                            onSplashComplete = {
+                                showSplash = false
+                            }
+                        )
+                    } else {
+                        val navController = rememberNavController()
+                        var selectedTab by remember { mutableIntStateOf(0) }
+                        val tabs = listOf(
+                            TabItem(Screen.Dashboard.route, "Главная", Icons.Default.Home),
+                            TabItem(Screen.Devices.route, "Устройства", Icons.Default.Build),
+                            TabItem(Screen.Sensors.route, "Мониторинг", Icons.Default.Info),
+                            TabItem(Screen.Scenarios.route, "Сценарии", Icons.Default.List),
+                            TabItem(Screen.Settings.route, "Настройки", Icons.Default.Settings)
+                        )
 
-                    Scaffold(
-                        bottomBar = {
-                            NavigationBar {
-                                tabs.forEachIndexed { index, tab ->
-                                    NavigationBarItem(
-                                        icon = { Icon(tab.icon, tab.label) },
-                                        label = { Text(tab.label) },
-                                        selected = selectedTab == index,
-                                        onClick = {
-                                            selectedTab = index
-                                            navController.navigate(tab.route) {
-                                                popUpTo(navController.graph.startDestinationId) {
-                                                    saveState = true
+                        Scaffold(
+                            bottomBar = {
+                                NavigationBar {
+                                    tabs.forEachIndexed { index, tab ->
+                                        NavigationBarItem(
+                                            icon = { Icon(tab.icon, tab.label) },
+                                            label = { Text(tab.label) },
+                                            selected = selectedTab == index,
+                                            onClick = {
+                                                selectedTab = index
+                                                navController.navigate(tab.route) {
+                                                    popUpTo(navController.graph.startDestinationId) {
+                                                        saveState = true
+                                                    }
+                                                    launchSingleTop = true
+                                                    restoreState = true
                                                 }
-                                                launchSingleTop = true
-                                                restoreState = true
                                             }
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
                             }
+                        ) { paddingValues ->
+                            SmartHomeNavGraph(
+                                modifier = Modifier.padding(paddingValues),
+                                navController = navController
+                            )
                         }
-                    ) { paddingValues ->
-                        SmartHomeNavGraph(
-                            modifier = Modifier.padding(paddingValues),
-                            navController = navController
-                        )
                     }
                 }
             }
