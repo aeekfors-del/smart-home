@@ -15,5 +15,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "SmartHome"
+rootProject.name = "SmartHomeMonitor"
 include(":app")

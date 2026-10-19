@@ -1,6 +1,6 @@
 $adbPath = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 
-Write-Host "Launching SmartHome app..."
+Write-Host "Launching SmartHome Monitor app..."
 & $adbPath shell am start -n com.besenok.smarthome/.ui.MainActivity
 if ($LASTEXITCODE -eq 0) {
     Write-Host "[OK] App launched successfully!"

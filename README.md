@@ -1,6 +1,6 @@
-# Smart Home — Android приложение для ioBroker (EmteriaOS на Raspberry Pi 5)
+# Smart Home Monitor — Android приложение для ioBroker (EmteriaOS на Raspberry Pi 5)
 
-Android-приложение для управления системой умного дома **ioBroker**, оптимизированное для **Raspberry Pi 5** с **EmteriaOS**.
+Android-приложение для мониторинга и управления системой умного дома **ioBroker**, оптимизированное для **Raspberry Pi 5** с **EmteriaOS**.
 
 ## 🌟 Основные функции
 

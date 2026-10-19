@@ -4,7 +4,7 @@ $adbPath = "$sdkPath\platform-tools\adb.exe"
 $apkPath = "C:\Users\Besenok\IdeaProjects\untitled\app\build\outputs\apk\debug\app-debug.apk"
 
 Write-Host "========================================="
-Write-Host "SmartHome App - Launch Script"
+Write-Host "SmartHome Monitor - Launch Script"
 Write-Host "========================================="
 Write-Host ""
 
@@ -57,7 +57,7 @@ if ($LASTEXITCODE -eq 0) {
 Write-Host ""
 Write-Host "========================================="
 Write-Host "Launch the app manually on the emulator:"
-Write-Host "  App: SmartHome (com.besenok.smarthome)"
+Write-Host "  App: SmartHome Monitor (com.besenok.smarthome)"
 Write-Host "========================================="
 Write-Host ""
 Write-Host "To install and launch in one command, run:"
