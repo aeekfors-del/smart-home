@@ -197,7 +197,7 @@ fun ForecastDayCardCompact(entry: WeatherInfo.ForecastEntry) {
     // Карточка с полной информацией о погоде
     Card(
         modifier = Modifier
-            .fillMaxWidth()
+            .width(160.dp)
             .padding(4.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -304,7 +304,7 @@ fun ForecastDayCardCompact(entry: WeatherInfo.ForecastEntry) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    String.format("☁️ %.0f%%", entry.cloudiness),
+                    String.format("☁️ %d%%", entry.cloudiness),
                     style = MaterialTheme.typography.bodySmall
                 )
                 if (entry.precipitationProbability > 0.05) {
@@ -542,3 +542,4 @@ fun TimeWidgetCard() {
         }
     }
 }
+
