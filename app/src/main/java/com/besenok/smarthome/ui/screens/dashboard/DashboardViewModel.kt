@@ -50,8 +50,9 @@ class DashboardViewModel @Inject constructor(
             iobrokerRepository.connect()
             loadDevices()
             loadSensors()
-            loadWeather()
+            loadWeather() // Загрузка при старте
             loadTime()
+            scheduleWeatherUpdates() // Периодическое обновление каждый час
         }
     }
 
@@ -92,6 +93,19 @@ class DashboardViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading weather", e)
                 _weatherState.value = UiState.Error(e.message ?: "Failed to load weather")
+            }
+        }
+    }
+
+    /**
+     * Периодическое обновление погоды каждый час (3600000 мс)
+     */
+    private fun scheduleWeatherUpdates() {
+        viewModelScope.launch {
+            while (true) {
+                delay(3600000) // 1 час
+                Log.d(TAG, "Scheduled weather update triggered")
+                loadWeather()
             }
         }
     }
