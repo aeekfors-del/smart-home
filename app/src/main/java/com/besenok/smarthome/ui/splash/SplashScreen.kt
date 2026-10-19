@@ -15,11 +15,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.besenok.smarthome.R
 import kotlinx.coroutines.delay
 
 private val CyanLaser = Color(0xFF00E5FF)
@@ -57,7 +57,7 @@ fun SplashScreen(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.alpha(if (showLogo || showText) 1f else 0f)
         ) {
-            // Logo with glow
+            // Logo with glow - loads PNG only after animation starts
             if (showLogo) {
                 LogoWithGlow()
                 Spacer(modifier = Modifier.height(24.dp))
@@ -178,11 +178,11 @@ private fun LogoWithGlow() {
             }
         }
         
-        // M logo with icons
+        // PNG logo - loaded only after animation starts (showLogo = true)
         Image(
-            painter = androidx.compose.ui.res.painterResource(id = com.besenok.smarthome.R.drawable.ic_splash_logo),
+            painter = painterResource(id = R.drawable.logo_splash),
             contentDescription = "Smart Home Monitor Logo",
-            modifier = Modifier.size(140.dp)
+            modifier = Modifier.size(160.dp)
         )
     }
 }
