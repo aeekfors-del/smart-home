@@ -64,13 +64,13 @@ Android-приложение для управления системой умн
 - **Tuya розетки:** 100% (определены как SOCKET по числовым DP ID)
 - **MQTT водосчётчики:** определены как SENSOR (fallback OTHER)
 
-![Dashboard](docs/screenshots/v0.6-dashboard.png)
+![Dashboard](https://github.com/aeekfors-del/smart-home/raw/master/docs/screenshots/v0.6/v0.6-dashboard.png)
 *Главный экран — Dashboard с погодой и статусом ioBroker*
 
-![Устройства с фильтрацией](docs/screenshots/v0.6-devices-filter.png)
+![Устройства с фильтрацией](https://github.com/aeekfors-del/smart-home/raw/master/docs/screenshots/v0.6/v0.6-devices-filter.png)
 *Экран устройств — фильтрация по вкладкам (Свет, Розетки, Датчики)*
 
-![Детали устройства](docs/screenshots/v0.6-device-detail.png)
+![Детали устройства](https://github.com/aeekfors-del/smart-home/raw/master/docs/screenshots/v0.6/v0.6-device-detail.png)
 *Карточка деталей — нормализованные значения и умный переключатель*
 
 ### Техническая реализация:
