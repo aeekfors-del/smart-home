@@ -2,6 +2,7 @@ package com.besenok.smarthome.ui.splash
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,11 +15,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
 import kotlinx.coroutines.delay
 
 private val CyanLaser = Color(0xFF00E5FF)
@@ -153,7 +154,7 @@ private fun LogoWithGlow() {
     
     Box(
         modifier = Modifier
-            .size(140.dp)
+            .size(160.dp)
             .clip(RoundedCornerShape(24.dp))
             .background(
                 Color(0xFF0D1B2A),
@@ -172,17 +173,16 @@ private fun LogoWithGlow() {
                 drawRect(
                     color = CyanLaser.copy(alpha = 0.3f * glowAlpha),
                     size = size,
-                    style = Stroke(width = 4f)
+                    style = Stroke(width = 6f)
                 )
             }
         }
         
-        // Placeholder logo - replace with Image(painter = painterResource(id = R.drawable.logo_splash)) when logo is available
-        Icon(
-            imageVector = Icons.Filled.Home,
-            contentDescription = null,
-            tint = CyanLaser,
-            modifier = Modifier.size(80.dp)
+        // M logo with icons
+        Image(
+            painter = androidx.compose.ui.res.painterResource(id = com.besenok.smarthome.R.drawable.ic_splash_logo),
+            contentDescription = "Smart Home Monitor Logo",
+            modifier = Modifier.size(140.dp)
         )
     }
 }

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="240dp"
+    android:viewportWidth="240"
+    android:viewportHeight="240">
+    
+    <!-- M shape background with dark fill -->
+    <path
+        android:fillColor="#0A0E14"
+        android:pathData="M30,30 L100,30 L100,100 Q100,120 120,120 Q140,120 140,100 L140,30 L210,30 L210,100 Q210,120 190,120 L140,120 L140,140 L190,140 Q210,140 210,160 L210,210 L140,210 L140,180 L100,180 L100,210 L30,210 L30,160 Q30,140 50,140 L100,140 L100,120 L50,120 Q30,120 30,100 Z" />
+    
+    <!-- Cyan neon glow border -->
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="6"
+        android:strokeAlpha="0.8"
+        android:fillColor="#00000000"
+        android:pathData="M30,30 L100,30 L100,100 Q100,120 120,120 Q140,120 140,100 L140,30 L210,30 L210,100 Q210,120 190,120 L140,120 L140,140 L190,140 Q210,140 210,160 L210,210 L140,210 L140,180 L100,180 L100,210 L30,210 L30,160 Q30,140 50,140 L100,140 L100,120 L50,120 Q30,120 30,100 Z" />
+    
+    <!-- Inner glow effect -->
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="2"
+        android:strokeAlpha="0.3"
+        android:fillColor="#00000000"
+        android:pathData="M35,35 L95,35 L95,95 Q95,115 120,115 Q145,115 145,95 L145,35 L205,35 L205,95 Q205,115 185,115 L145,115 L145,145 L185,145 Q205,145 205,165 L205,205 L145,205 L145,175 L95,175 L95,205 L35,205 L35,165 Q35,145 55,145 L95,145 L95,125 L55,125 Q35,125 35,105 Z" />
+    
+    <!-- Top-left quadrant - Home icon -->
+    <path
+        android:fillColor="#00E5FF"
+        android:fillAlpha="0.9"
+        android:pathData="M65,55 L85,55 L85,75 L65,75 Z" />
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M75,48 L65,58 L65,78 L85,78 L85,58 Z" />
+    
+    <!-- Top-right quadrant - Gear icon -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M175,58 A12,12 0 1,1 175,82 A12,12 0 1,1 175,58 Z" />
+    <path
+        android:fillColor="#0A0E14"
+        android:pathData="M175,65 A5,5 0 1,0 175,75 A5,5 0 1,0 175,65 Z" />
+    
+    <!-- Bottom-left quadrant - Chart/Graph icon -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M55,195 L55,165 L65,165 L65,155 L75,155 L75,145 L85,145 L85,140 L95,140 L95,195 Z" />
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M80,150 L85,145 L90,150" />
+    
+    <!-- Bottom-right quadrant - WiFi icon -->
+    <path
+        android:fillColor="#00E5FF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M160,190 Q175,175 190,190" />
+    <path
+        android:fillColor="#00E5FF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M165,182 Q175,172 185,182" />
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M173,174 A3,3 0 1,1 173,180 A3,3 0 1,1 173,174 Z" />
+    
+    <!-- Center M divider -->
+    <path
+        android:fillColor="#0A0E14"
+        android:pathData="M100,120 L140,120 L140,140 L100,140 Z" />
+</vector>
