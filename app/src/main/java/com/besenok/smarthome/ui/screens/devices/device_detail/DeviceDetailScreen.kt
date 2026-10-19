@@ -173,10 +173,12 @@ private fun ChannelCompactCard(
                 
                 val unit = channel.state?.unit ?: ""
                 val displayText = formatValueCompact(displayValue, unit)
+                val isBoolean = isBooleanValue(displayValue)
                 
                 Text(
                     text = "Значение: $displayText",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = if (isBoolean) MaterialTheme.typography.bodySmall 
+                            else MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 
@@ -192,19 +194,20 @@ private fun ChannelCompactCard(
             // Правая часть - элемент управления
             when (channel.controlType) {
                 ControlType.SWITCH -> {
-                    val isChecked = when (displayValue) {
-                        is Boolean -> displayValue
-                        is String -> displayValue.lowercase() !in listOf("false", "0", "off")
-                        is Number -> displayValue.toInt() != 0
-                        else -> false
-                    }
-                    Switch(
-                        checked = isChecked,
-                        onCheckedChange = { newValue ->
-                            // Всегда отправляем Boolean для SWITCH
-                            onToggle(newValue)
+                    if (isBooleanValue(displayValue)) {
+                        val isChecked = when (displayValue) {
+                            is Boolean -> displayValue
+                            is String -> displayValue.lowercase() !in listOf("false", "0", "off")
+                            is Number -> displayValue.toInt() != 0
+                            else -> false
                         }
-                    )
+                        Switch(
+                            checked = isChecked,
+                            onCheckedChange = { newValue ->
+                                onToggle(newValue)
+                            }
+                        )
+                    }
                 }
                 ControlType.COLOR_PICKER -> {
                     // Парсим текущий цвет из строки "#RRGGBB"
@@ -350,12 +353,25 @@ private fun colorToHex(color: Color): String {
     return String.format("#%02X%02X%02X", (color.red * 255).toInt(), (color.green * 255).toInt(), (color.blue * 255).toInt())
 }
 
+private fun isBooleanValue(value: Any?): Boolean {
+    return when (value) {
+        is Boolean -> true
+        is String -> value.lowercase() in listOf("true", "false", "on", "off", "1", "0", "yes", "no")
+        is Number -> value.toInt() in listOf(0, 1)
+        else -> false
+    }
+}
+
 private fun formatValueCompact(value: Any?, unit: String?): String {
     if (value == null) return "Недоступно"
     
     val text = when (value) {
         is Boolean -> if (value) "Вкл" else "Выкл"
-        is String -> value
+        is String -> when (value.lowercase()) {
+            "true", "on", "1", "yes" -> "Вкл"
+            "false", "off", "0", "no" -> "Выкл"
+            else -> value
+        }
         is Number -> value.toString()
         else -> value.toString()
     }
