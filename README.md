@@ -128,6 +128,16 @@ Android-приложение для мониторинга и управлени
 - Заменена на HTTP Basic Auth (ioBroker не поддерживает /auth endpoint)
 - Подробнее в v0.7.0
 
+### 📱 Версия Alpha v0.6.1 — Иконка приложения и тёмный splash
+
+#### 🎨 Иконка приложения
+- Адаптивная иконка из PNG логотипа `logo_splash.png`
+- Тёмный фон `#0A0E14` для минимизации системного Android splash
+
+#### Техническая реализация:
+- `ic_launcher.xml` — adaptive icon с `logo_splash.png` в foreground
+- `Theme.SmartHomeMonitor` — `windowBackground` тёмного цвета
+
 ---
 
 ### Техническая реализация:
@@ -138,19 +148,7 @@ Android-приложение для мониторинга и управлени
 
 ---
 
-## 📱 Версия Alpha v0.6.1 — Иконка приложения и тёмный splash
-
-### 🎨 Иконка приложения
-- Адаптивная иконка из PNG логотипа `logo_splash.png`
-- Тёмный фон `#0A0E14` для минимизации системного Android splash
-
-### Техническая реализация:
-- `ic_launcher.xml` — adaptive icon с `logo_splash.png` в foreground
-- `Theme.SmartHomeMonitor` — `windowBackground` тёмного цвета
-
----
-
-## 📱 Версия Alpha v0.5 — Расширенный прогноз погоды
+## 📱 Версия Alpha v0.5 — Расшишенный прогноз погоды
 
 ### Прогноз с полной информацией (8 объектов, 25 полей)
 - **Температура:** текущая, ощущается как, min/max за день
