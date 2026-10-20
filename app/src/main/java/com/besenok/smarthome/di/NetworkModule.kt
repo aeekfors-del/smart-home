@@ -15,6 +15,7 @@ import com.besenok.smarthome.data.repository.TimeRepositoryImpl
 import com.besenok.smarthome.domain.repository.IobrokerRepository
 import com.besenok.smarthome.domain.repository.WeatherRepository
 import com.besenok.smarthome.domain.repository.TimeRepository
+import com.besenok.smarthome.util.RateLimiter
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -40,6 +41,12 @@ object NetworkModule {
     private val json = Json {
         ignoreUnknownKeys = true
         coerceInputValues = true
+    }
+
+    @Provides
+    @Singleton
+    fun provideRateLimiter(): RateLimiter {
+        return RateLimiter(maxRequests = 10, windowSeconds = 1)
     }
 
     @Provides
