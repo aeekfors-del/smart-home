@@ -30,6 +30,46 @@ Android-приложение для мониторинга и управлени
 
 ---
 
+## 📱 Версия Alpha v0.7.0 — HTTP Basic Auth + SRP рефакторинг
+
+#### 🔐 Аутентификация
+- **HTTP Basic Auth** — стандартный протокол ioBroker REST API (Authorization: Basic base64)
+- **Пароль зашифрован** через `CryptoHelper` (AES-256-GCM через Android Keystore)
+- Ключ генерируется автоматически при первом использовании и хранится в hardware-backed Keystore
+- Расшифровка происходит прозрачно при каждом запросе к API
+- SSL pinning disabled для работы с самоподписанными сертификатами ioBroker
+
+#### ⚡ Rate Limiting
+- Sliding window алгоритм ограничения запросов
+- **10 запросов в секунду** на клиенте для предотвращения перегрузки ioBroker API
+- Встроен в `IobrokerRestClient` через Hilt DI
+
+#### 🛠 SRP Рефакторинг — разделение ответственности
+`IobrokerApiService` (~550 строк) разделён на фокусированные классы:
+
+| Класс | Ответственность |
+|-------|----------------|
+| `IobrokerRestClient` | REST API координатор, HTTP запросы, connection management, rate limiting |
+| `AdapterService` | Управление адаптерами ioBroker (getAdapterList, alive status) |
+| `DeviceParser` | Парсинг устройств из JSON объектов |
+| `DeviceClassifier` | Weighted scoring классификация устройств по каналам (140 строк алгоритма) |
+| `JsonUtils` | Общие JSON утилиты (getString, parseValue) |
+| `TypeMapper` | Единый маппинг типов устройств и контролов |
+
+**Результат:** каждый класс решает одну задачу, легко тестировать и поддерживать.
+
+#### 📡 REST API вместо WebSocket
+- Все запросы к ioBroker через HTTP REST API (порт 8087)
+- Endpoints: `/json/getPlainValue`, `/json/set`, `/json/get`, `/objects`, `/states`
+- Более предсказуемое поведение, проще отладка
+
+#### 🔄 Автоматическое управление соединением
+- Keep-alive механизм каждые 30 секунд
+- Auto-reconnection с exponential backoff (1s → 30s max)
+- Graceful degradation при потере соединения
+
+---
+
 ## 📱 Версия Alpha v0.6 — Автоматическая классификация устройств
 
 ### 🎯 Умное определение типа устройства
@@ -89,53 +129,6 @@ Android-приложение для мониторинга и управлени
 - Подробнее в v0.7.0
 
 ---
-
-### 📱 Версия Alpha v0.7.0 — HTTP Basic Auth + SRP рефакторинг
-
-#### 🔐 Аутентификация
-- **HTTP Basic Auth** — стандартный протокол ioBroker REST API (Authorization: Basic base64)
-- **Пароль зашифрован** через `CryptoHelper` (AES-256-GCM через Android Keystore)
-- Ключ генерируется автоматически при первом использовании и хранится в hardware-backed Keystore
-- Расшифровка происходит прозрачно при каждом запросе к API
-- SSL pinning disabled для работы с самоподписанными сертификатами ioBroker
-
-#### ⚡ Rate Limiting
-- Sliding window алгоритм ограничения запросов
-- **10 запросов в секунду** на клиенте для предотвращения перегрузки ioBroker API
-- Встроен в `IobrokerRestClient` через Hilt DI
-
-#### 🛠 SRP Рефакторинг — разделение ответственности
-`IobrokerApiService` (~550 строк) разделён на фокусированные классы:
-
-| Класс | Ответственность |
-|-------|----------------|
-| `IobrokerRestClient` | REST API координатор, HTTP запросы, connection management, rate limiting |
-| `AdapterService` | Управление адаптерами ioBroker (getAdapterList, alive status) |
-| `DeviceParser` | Парсинг устройств из JSON объектов |
-| `DeviceClassifier` | Weighted scoring классификация устройств по каналам (140 строк алгоритма) |
-| `JsonUtils` | Общие JSON утилиты (getString, parseValue) |
-| `TypeMapper` | Единый маппинг типов устройств и контролов |
-
-**Результат:** каждый класс решает одну задачу, легко тестировать и поддерживать.
-
-#### 📡 REST API вместо WebSocket
-- Все запросы к ioBroker через HTTP REST API (порт 8087)
-- Endpoints: `/json/getPlainValue`, `/json/set`, `/json/get`, `/objects`, `/states`
-- Более предсказуемое поведение, проще отладка
-
-#### 🔄 Автоматическое управление соединением
-- Keep-alive механизм каждые 30 секунд
-- Auto-reconnection с exponential backoff (1s → 30s max)
-- Graceful degradation при потере соединения
-
-![Dashboard](https://github.com/aeekfors-del/smart-home/raw/master/docs/screenshots/v0.6/v0.6-dashboard.png)
-*Главный экран — Dashboard с погодой и статусом ioBroker*
-
-![Устройства с фильтрацией](https://github.com/aeekfors-del/smart-home/raw/master/docs/screenshots/v0.6/v0.6-devices-filter.png)
-*Экран устройств — фильтрация по вкладкам (Свет, Розетки, Датчики)*
-
-![Детали устройства](https://github.com/aeekfors-del/smart-home/raw/master/docs/screenshots/v0.6/v0.6-device-detail.png)
-*Карточка деталей — нормализованные значения и умный переключатель*
 
 ### Техническая реализация:
 - `IobrokerApiService.detectDeviceTypeFromChannels()` — анализ ролей каналов с взвешенным скорингом
