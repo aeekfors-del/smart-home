@@ -30,18 +30,6 @@ Android-приложение для мониторинга и управлени
 
 ---
 
-## 📱 Версия Alpha v0.6.1 — Иконка приложения и тёмный splash
-
-### 🎨 Иконка приложения
-- Адаптивная иконка из PNG логотипа `logo_splash.png`
-- Тёмный фон `#0A0E14` для минимизации системного Android splash
-
-### Техническая реализация:
-- `ic_launcher.xml` — adaptive icon с `logo_splash.png` в foreground
-- `Theme.SmartHomeMonitor` — `windowBackground` тёмного цвета
-
----
-
 ## 📱 Версия Alpha v0.6 — Автоматическая классификация устройств
 
 ### 🎯 Умное определение типа устройства
@@ -154,6 +142,18 @@ Android-приложение для мониторинга и управлени
 - `DeviceListViewModel.setFilter()` — пересчёт групп при смене фильтра
 - `DeviceDetailScreen.isBooleanValue()` — определение булевых значений
 - `DeviceDetailScreen.formatValueCompact()` — нормализация строковых булевых
+
+---
+
+## 📱 Версия Alpha v0.6.1 — Иконка приложения и тёмный splash
+
+### 🎨 Иконка приложения
+- Адаптивная иконка из PNG логотипа `logo_splash.png`
+- Тёмный фон `#0A0E14` для минимизации системного Android splash
+
+### Техническая реализация:
+- `ic_launcher.xml` — adaptive icon с `logo_splash.png` в foreground
+- `Theme.SmartHomeMonitor` — `windowBackground` тёмного цвета
 
 ---
 
