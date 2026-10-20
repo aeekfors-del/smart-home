@@ -4,80 +4,6 @@ Android-приложение для мониторинга и управлени
 
 ---
 
-## 📱 Версия Alpha v0.7.0 — HTTP Basic Auth + SRP рефакторинг + AES шифрование
-
-### 🔐 Аутентификация
-- **HTTP Basic Auth** — стандартный протокол ioBroker REST API (Authorization: Basic base64)
-- **Пароль зашифрован** через `CryptoHelper` (AES-256-GCM через Android Keystore)
-- Ключ генерируется автоматически при первом использовании и хранится в hardware-backed Keystore
-- Расшифровка происходит прозрачно при каждом запросе к API
-- SSL pinning disabled для работы с самоподписанными сертификатами ioBroker
-
-### ⚡ Rate Limiting
-- Sliding window алгоритм ограничения запросов
-- **10 запросов в секунду** на клиенте для предотвращения перегрузки ioBroker API
-- Встроен в `IobrokerRestClient` через Hilt DI
-
-### 🛠 SRP Рефакторинг — разделение ответственности
-`IobrokerApiService` (~550 строк) разделён на фокусированные классы:
-
-| Класс | Ответственность |
-|-------|----------------|
-| `IobrokerRestClient` | REST API координатор, HTTP запросы, connection management, rate limiting |
-| `AdapterService` | Управление адаптерами ioBroker (getAdapterList, alive status) |
-| `DeviceParser` | Парсинг устройств из JSON объектов |
-| `DeviceClassifier` | Weighted scoring классификация устройств по каналам (140 строк алгоритма) |
-| `JsonUtils` | Общие JSON утилиты (getString, parseValue) |
-| `TypeMapper` | Единый маппинг типов устройств и контролов |
-
-**Результат:** каждый класс решает одну задачу, легко тестировать и поддерживать.
-
-### 📡 REST API вместо WebSocket
-- Все запросы к ioBroker через HTTP REST API (порт 8087)
-- Endpoints: `/json/getPlainValue`, `/json/set`, `/json/get`, `/objects`, `/states`
-- Более предсказуемое поведение, проще отладка
-
-### 🔄 Автоматическое управление соединением
-- Keep-alive механизм каждые 30 секунд
-- Auto-reconnection с exponential backoff (1s → 30s max)
-- Graceful degradation при потере соединения
-
-### 🧪 Точность классификации устройств
-- **Mihome устройства:** 100% (датчики корректно определены как SENSOR)
-- **Tuya розетки:** 100% (определены как SOCKET)
-- **MQTT водосчётчики:** определены как SENSOR (fallback OTHER)
-
----
-
-## 📱 Версия Alpha v0.6.3 — Токенная аутентификация (устарела)
-
-### 🔐 Безопасность
-- **Заменена Basic Auth (Base64) на токенную аутентификацию** — Base64 это НЕ шифрование
-- JWT токен с автоматическим обновлением при истечении срока
-- Bearer token в заголовках всех API запросов
-- Токен хранится в `AuthTokenService` с кэшированием
-- **Пароль уже зашифрован** через `CryptoHelper` (AES-256-GCM через Android Keystore) — реализовано в v0.6.2
-
-### ⚡ Rate Limiting
-- Sliding window алгоритм ограничения запросов
-- **10 запросов в секунду** на клиенте для предотвращения перегрузки ioBroker API
-- Mutex-синхронизация для потокобезопасности
-- Автоматическое ожидание при достижении лимита
-
-### 🔄 Автоматическое управление токенами
-- Кэширование валидного токена
-- Авто-переаутентификация при истечении срока
-- Обновление токена в keep-alive механизме
-- Graceful reconnection при потере аутентификации
-
-### 🛠 Техническая реализация:
-- `AuthTokenService` — JWT аутентификация, auto-refresh, Bearer token
-- `RateLimiter` — sliding window (10 req/sec) с Mutex
-- `IobrokerWebSocketClient` — все API методы используют токены + rate limiting
-- `AuthModule` — Hilt DI для RateLimiter (Json удалён для избежания duplicate binding)
-
----
-
 ## 🌟 Основные функции
 
 ### 🏠 Управление устройствами
@@ -151,6 +77,68 @@ Android-приложение для мониторинга и управлени
 - **Mihome устройства:** 100% (датчики температуры, движения, открытия корректно определены как SENSOR)
 - **Tuya розетки:** 100% (определены как SOCKET по числовым DP ID)
 - **MQTT водосчётчики:** определены как SENSOR (fallback OTHER)
+
+### 📱 Версия Alpha v0.6.2 — AES-256-GCM шифрование паролей
+
+#### 🔐 Безопасность
+- **Пароль зашифрован** через `CryptoHelper` (AES-256-GCM через Android Keystore)
+- Ключ генерируется автоматически при первом использовании и хранится в hardware-backed Keystore
+- Пароль хранится в DataStore как Base64(IV + ciphertext)
+- Расшифровка происходит прозрачно при каждом чтении
+- Base64 больше не используется как "аутентификация" — только для хранения
+
+#### Техническая реализация:
+- `CryptoHelper` — AES/GCM/NoPadding через Android Keystore
+- `getSecretKey()` — автоинициализация ключа если отсутствует
+- `encrypt()` / `decrypt()` — прозрачное шифрование/дешифрование
+- Ключ хранится в hardware-backed Android Keystore (не может быть извлечён)
+
+---
+
+### 📱 Версия Alpha v0.6.3 — Token auth (устарела в v0.7.0)
+
+- Заменена на HTTP Basic Auth (ioBroker не поддерживает /auth endpoint)
+- Подробнее в v0.7.0
+
+---
+
+### 📱 Версия Alpha v0.7.0 — HTTP Basic Auth + SRP рефакторинг
+
+#### 🔐 Аутентификация
+- **HTTP Basic Auth** — стандартный протокол ioBroker REST API (Authorization: Basic base64)
+- **Пароль зашифрован** через `CryptoHelper` (AES-256-GCM через Android Keystore)
+- Ключ генерируется автоматически при первом использовании и хранится в hardware-backed Keystore
+- Расшифровка происходит прозрачно при каждом запросе к API
+- SSL pinning disabled для работы с самоподписанными сертификатами ioBroker
+
+#### ⚡ Rate Limiting
+- Sliding window алгоритм ограничения запросов
+- **10 запросов в секунду** на клиенте для предотвращения перегрузки ioBroker API
+- Встроен в `IobrokerRestClient` через Hilt DI
+
+#### 🛠 SRP Рефакторинг — разделение ответственности
+`IobrokerApiService` (~550 строк) разделён на фокусированные классы:
+
+| Класс | Ответственность |
+|-------|----------------|
+| `IobrokerRestClient` | REST API координатор, HTTP запросы, connection management, rate limiting |
+| `AdapterService` | Управление адаптерами ioBroker (getAdapterList, alive status) |
+| `DeviceParser` | Парсинг устройств из JSON объектов |
+| `DeviceClassifier` | Weighted scoring классификация устройств по каналам (140 строк алгоритма) |
+| `JsonUtils` | Общие JSON утилиты (getString, parseValue) |
+| `TypeMapper` | Единый маппинг типов устройств и контролов |
+
+**Результат:** каждый класс решает одну задачу, легко тестировать и поддерживать.
+
+#### 📡 REST API вместо WebSocket
+- Все запросы к ioBroker через HTTP REST API (порт 8087)
+- Endpoints: `/json/getPlainValue`, `/json/set`, `/json/get`, `/objects`, `/states`
+- Более предсказуемое поведение, проще отладка
+
+#### 🔄 Автоматическое управление соединением
+- Keep-alive механизм каждые 30 секунд
+- Auto-reconnection с exponential backoff (1s → 30s max)
+- Graceful degradation при потере соединения
 
 ![Dashboard](https://github.com/aeekfors-del/smart-home/raw/master/docs/screenshots/v0.6/v0.6-dashboard.png)
 *Главный экран — Dashboard с погодой и статусом ioBroker*
