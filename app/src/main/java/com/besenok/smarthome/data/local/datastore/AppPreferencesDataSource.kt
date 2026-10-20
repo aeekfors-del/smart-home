@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.besenok.smarthome.util.CryptoHelper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -122,7 +123,8 @@ class AppPreferencesDataSource(private val context: Context) {
     }
 
     val iobrokerPassword: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[IOBROKER_PASSWORD] ?: ""
+        val encrypted = preferences[IOBROKER_PASSWORD] ?: ""
+        CryptoHelper.decrypt(encrypted)
     }
 
     val weatherRegion: Flow<String> = context.dataStore.data.map { preferences ->
@@ -142,11 +144,12 @@ class AppPreferencesDataSource(private val context: Context) {
     }
 
     suspend fun saveIoBrokerSettings(host: String, port: String, username: String, password: String) {
+        val encryptedPassword = CryptoHelper.encrypt(password)
         context.dataStore.edit { preferences ->
             preferences[IOBROKER_HOST] = host
             preferences[IOBROKER_PORT] = port
             preferences[IOBROKER_USERNAME] = username
-            preferences[IOBROKER_PASSWORD] = password
+            preferences[IOBROKER_PASSWORD] = encryptedPassword
         }
     }
 
