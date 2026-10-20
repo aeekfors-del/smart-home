@@ -12,7 +12,6 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -49,9 +48,11 @@ class AuthTokenService @Inject constructor(
     suspend fun authenticate(): Result<AuthToken> {
         return try {
             val host = preferences.iobrokerHost.first()
-            val port = preferences.iobrokerPort.first()
             val username = preferences.iobrokerUsername.first()
             val password = CryptoHelper.decrypt(preferences.iobrokerPassword.first())
+            
+            // ioBroker admin auth endpoint: /admin/login
+            val restPort = "8087"
 
             val sslContext = SSLContext.getInstance("TLS")
             val trustAllCerts = arrayOf<TrustManager>(
@@ -68,8 +69,9 @@ class AuthTokenService @Inject constructor(
                     config {
                         sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
                         hostnameVerifier { _, _ -> true }
-                        connectTimeout(10, TimeUnit.SECONDS)
-                        readTimeout(10, TimeUnit.SECONDS)
+                        connectTimeout(30, TimeUnit.SECONDS)
+                        readTimeout(30, TimeUnit.SECONDS)
+                        writeTimeout(30, TimeUnit.SECONDS)
                     }
                 }
                 install(ContentNegotiation) {
@@ -79,35 +81,31 @@ class AuthTokenService @Inject constructor(
 
             httpClient = client
 
-            val response = client.post("https://$host:$port/auth") {
+            // ioBroker admin/login endpoint для получения токена
+            val response = client.post("https://$host:$restPort/admin/login") {
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(
                     AuthRequest.serializer(),
                     AuthRequest(username, password)
                 ))
-            }
+            }.body<String>()
+            
+            Log.d(TAG, "Auth response from ioBroker: $response")
 
-            if (response.status.isSuccess()) {
-                val body = response.body<String>()
-                val tokenData = json.decodeFromString<AuthTokenResponse>(body)
+            val tokenData = json.decodeFromString<AuthTokenResponse>(response)
 
-                if (tokenData.token != null) {
-                    currentToken = AuthToken(
-                        token = tokenData.token!!,
-                        expire = tokenData.expire ?: (System.currentTimeMillis() / 1000 + 3600),
-                        created = System.currentTimeMillis() / 1000
-                    )
+            if (tokenData.token != null) {
+                currentToken = AuthToken(
+                    token = tokenData.token!!,
+                    expire = tokenData.expire ?: (System.currentTimeMillis() / 1000 + 3600),
+                    created = System.currentTimeMillis() / 1000
+                )
 
-                    Log.d(TAG, "Authenticated successfully, token expires in ${currentToken!!.remainingSeconds}s")
-                    Result.success(currentToken!!)
-                } else {
-                    Log.e(TAG, "No token in response")
-                    Result.failure(Exception("No token received"))
-                }
+                Log.d(TAG, "Authenticated successfully, token expires in ${currentToken!!.remainingSeconds}s")
+                Result.success(currentToken!!)
             } else {
-                val errorBody = response.body<String>()
-                Log.e(TAG, "Auth failed: ${response.status} - $errorBody")
-                Result.failure(Exception("Auth failed: $errorBody"))
+                Log.e(TAG, "No token in response: $response")
+                Result.failure(Exception("No token received"))
             }
         } catch (e: Exception) {
             Log.e(TAG, "Authentication error", e)
@@ -164,8 +162,8 @@ class AuthTokenService @Inject constructor(
 
     @Serializable
     data class AuthTokenResponse(
-        val token: String?,
-        val expire: Long?,
-        val message: String?
+        val token: String? = null,
+        val expire: Long? = null,
+        val message: String? = null
     )
 }

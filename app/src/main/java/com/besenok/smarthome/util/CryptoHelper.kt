@@ -54,12 +54,18 @@ object CryptoHelper {
     }
 
     /**
-     * Получает секретный ключ из Keystore
+     * Получает секретный ключ из Keystore, инициализирует если отсутствует
      */
     private fun getSecretKey(): SecretKey {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply {
             load(null)
         }
+        
+        // Инициализируем ключ если он отсутствует
+        if (!keyStore.containsAlias(KEY_ALIAS)) {
+            initKeyGenerator().generateKey()
+        }
+        
         return keyStore.getKey(KEY_ALIAS, null) as SecretKey
     }
 

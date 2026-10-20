@@ -1,9 +1,9 @@
-package com.besenok.smarthome.data.repository
+﻿package com.besenok.smarthome.data.repository
 
 import android.util.Log
 import com.besenok.smarthome.data.local.datastore.AppPreferencesDataSource
-import com.besenok.smarthome.data.remote.iobroker.IobrokerApiService
-import com.besenok.smarthome.data.remote.iobroker.IobrokerWebSocketClient
+import com.besenok.smarthome.data.remote.iobroker.IobrokerApiClient
+import com.besenok.smarthome.data.remote.iobroker.IobrokerRestClient
 import com.besenok.smarthome.domain.model.AdapterInfo
 import com.besenok.smarthome.domain.model.ControlType
 import com.besenok.smarthome.domain.model.Device
@@ -13,6 +13,8 @@ import com.besenok.smarthome.domain.model.State
 import com.besenok.smarthome.domain.repository.ConnectionState
 import com.besenok.smarthome.domain.repository.IobrokerRepository
 import com.besenok.smarthome.ui.common.UiState
+import com.besenok.smarthome.util.JsonUtils
+import com.besenok.smarthome.util.TypeMapper
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonObject
 import javax.inject.Inject
@@ -22,19 +24,19 @@ private const val TAG = "IobrokerRepositoryImpl"
 
 @Singleton
 class IobrokerRepositoryImpl @Inject constructor(
-    private val apiService: IobrokerApiService,
-    private val webSocketClient: IobrokerWebSocketClient,
+    private val apiClient: IobrokerApiClient,
+    private val restClient: IobrokerRestClient,
     private val settingsDataSource: AppPreferencesDataSource
 ) : IobrokerRepository {
 
-    override val connectionState: StateFlow<ConnectionState> = webSocketClient.connectionState
+    override val connectionState: StateFlow<ConnectionState> = restClient.connectionState
 
     override suspend fun connect() {
-        webSocketClient.connect()
+        restClient.connect()
     }
 
     override suspend fun disconnect() {
-        webSocketClient.disconnect()
+        restClient.disconnect()
     }
 
     override suspend fun getDevices(): UiState<List<Device>> {
@@ -45,18 +47,18 @@ class IobrokerRepositoryImpl @Inject constructor(
             UiState.Success(devices)
         } catch (e: Exception) {
             Log.e(TAG, "Error getting devices", e)
-            UiState.Error(e.message ?: "Ошибка получения устройств")
+            UiState.Error(e.message ?: "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СѓСЃС‚СЂРѕР№СЃС‚РІ")
         }
     }
 
     private suspend fun parseDevicesFromObjects(): List<Device> {
         val allDevices = mutableListOf<Device>()
         
-        // Получаем список добавленных адаптеров из DataStore
+        // РџРѕР»СѓС‡Р°РµРј СЃРїРёСЃРѕРє РґРѕР±Р°РІР»РµРЅРЅС‹С… Р°РґР°РїС‚РµСЂРѕРІ РёР· DataStore
         val addedAdapters = settingsDataSource.getAddedAdapterIds()
         Log.d(TAG, "Loaded ${addedAdapters.size} added adapters from DataStore: $addedAdapters")
         
-        // Получаем список добавленных deviceIds
+        // РџРѕР»СѓС‡Р°РµРј СЃРїРёСЃРѕРє РґРѕР±Р°РІР»РµРЅРЅС‹С… deviceIds
         val addedDeviceIds = settingsDataSource.getAddedDeviceIds()
         Log.d(TAG, "Loaded ${addedDeviceIds.size} added deviceIds from DataStore: $addedDeviceIds")
         
@@ -65,19 +67,19 @@ class IobrokerRepositoryImpl @Inject constructor(
             return emptyList()
         }
         
-        // Для каждого добавленного адаптера загружаем устройства
+        // Р”Р»СЏ РєР°Р¶РґРѕРіРѕ РґРѕР±Р°РІР»РµРЅРЅРѕРіРѕ Р°РґР°РїС‚РµСЂР° Р·Р°РіСЂСѓР¶Р°РµРј СѓСЃС‚СЂРѕР№СЃС‚РІР°
         for (adapterId in addedAdapters) {
             try {
-                val adapterDevices = apiService.getAdapterDevices(adapterId)
+                val adapterDevices = apiClient.getAdapterDevices(adapterId)
                 Log.d(TAG, "Loaded ${adapterDevices.size} devices from adapter: $adapterId")
                 
-                // Фильтруем устройства - оставляем только те, что добавлены пользователем
+                // Р¤РёР»СЊС‚СЂСѓРµРј СѓСЃС‚СЂРѕР№СЃС‚РІР° - РѕСЃС‚Р°РІР»СЏРµРј С‚РѕР»СЊРєРѕ С‚Рµ, С‡С‚Рѕ РґРѕР±Р°РІР»РµРЅС‹ РїРѕР»СЊР·РѕРІР°С‚РµР»РµРј
                 val filteredDevices = if (addedDeviceIds.isNotEmpty()) {
                     val filtered = adapterDevices.filter { it.id in addedDeviceIds }
                     Log.d(TAG, "Filtered ${filtered.size} devices (from ${adapterDevices.size}) based on addedDeviceIds")
                     filtered
                 } else {
-                    // Если нет deviceIds, показываем все устройства адаптера
+                    // Р•СЃР»Рё РЅРµС‚ deviceIds, РїРѕРєР°Р·С‹РІР°РµРј РІСЃРµ СѓСЃС‚СЂРѕР№СЃС‚РІР° Р°РґР°РїС‚РµСЂР°
                     adapterDevices
                 }
                 
@@ -92,27 +94,27 @@ class IobrokerRepositoryImpl @Inject constructor(
     }
     
     /**
-     * Парсит устройства из группы (mihome.0, tuya.0, и т.д.)
+     * РџР°СЂСЃРёС‚ СѓСЃС‚СЂРѕР№СЃС‚РІР° РёР· РіСЂСѓРїРїС‹ (mihome.0, tuya.0, Рё С‚.Рґ.)
      */
     private suspend fun parseGroupDevices(
         pattern: String,
         groupName: String
     ): List<Device> {
-        // Получаем все объекты из группы
-        val allObjectsResponse = apiService.getObjects(pattern)
+        // РџРѕР»СѓС‡Р°РµРј РІСЃРµ РѕР±СЉРµРєС‚С‹ РёР· РіСЂСѓРїРїС‹
+        val allObjectsResponse = apiClient.getObjects(pattern)
         val allObjects = allObjectsResponse?.filterValues { it is JsonObject }?.map { (id, obj) -> obj as JsonObject } ?: emptyList()
         Log.d(TAG, "Got ${allObjects.size} objects from $pattern")
         
-        // Группируем devices по базовому ID устройства
+        // Р“СЂСѓРїРїРёСЂСѓРµРј devices РїРѕ Р±Р°Р·РѕРІРѕРјСѓ ID СѓСЃС‚СЂРѕР№СЃС‚РІР°
         val devicesMap = mutableMapOf<String, MutableList<JsonObject>>()
         
         for (obj in allObjects) {
-            val deviceId = getJsonString(obj, "_id") ?: continue
+            val deviceId = JsonUtils.getString(obj, "_id") ?: continue
             
-            // Проверяем, что это state из нужной группы
+            // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ СЌС‚Рѕ state РёР· РЅСѓР¶РЅРѕР№ РіСЂСѓРїРїС‹
             if (!deviceId.startsWith("$pattern".removeSuffix(".*"))) continue
             
-            // Извлекаем базовый ID устройства
+            // РР·РІР»РµРєР°РµРј Р±Р°Р·РѕРІС‹Р№ ID СѓСЃС‚СЂРѕР№СЃС‚РІР°
             val baseDeviceId = extractBaseDeviceId(deviceId)
             if (baseDeviceId == null) {
                 Log.w(TAG, "Could not extract base device ID from: $deviceId")
@@ -124,11 +126,11 @@ class IobrokerRepositoryImpl @Inject constructor(
         
         Log.d(TAG, "Found ${devicesMap.size} unique devices in $groupName")
         
-        // Получаем все состояния для получения значений
-        val allStates = apiService.getStates(pattern)
+        // РџРѕР»СѓС‡Р°РµРј РІСЃРµ СЃРѕСЃС‚РѕСЏРЅРёСЏ РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ Р·РЅР°С‡РµРЅРёР№
+        val allStates = apiClient.getStates(pattern)
         Log.d(TAG, "Got ${allStates?.keys?.size} states from $pattern")
         
-        // Парсим устройства
+        // РџР°СЂСЃРёРј СѓСЃС‚СЂРѕР№СЃС‚РІР°
         val devices = mutableListOf<Device>()
         for ((baseId, stateObjects) in devicesMap) {
             val device = parseGroupDevice(baseId, stateObjects, allStates ?: emptyMap(), groupName)
@@ -142,22 +144,22 @@ class IobrokerRepositoryImpl @Inject constructor(
     }
     
     /**
-     * Извлекает базовый ID устройства из полного ID state
+     * РР·РІР»РµРєР°РµС‚ Р±Р°Р·РѕРІС‹Р№ ID СѓСЃС‚СЂРѕР№СЃС‚РІР° РёР· РїРѕР»РЅРѕРіРѕ ID state
      */
     private fun extractBaseDeviceId(fullId: String): String? {
         val parts = fullId.split(".")
         
-        // Для Tuya: tuya.0.deviceId.stateName (минимум 4 части)
+        // Р”Р»СЏ Tuya: tuya.0.deviceId.stateName (РјРёРЅРёРјСѓРј 4 С‡Р°СЃС‚Рё)
         if (fullId.startsWith("tuya.0.")) {
             if (parts.size < 4) return null
-            // Берём первые 3 части: tuya.0.deviceId
+            // Р‘РµСЂС‘Рј РїРµСЂРІС‹Рµ 3 С‡Р°СЃС‚Рё: tuya.0.deviceId
             return parts.take(3).joinToString(".")
         }
         
-        // Для mihome: mihome.0.devices.deviceType_id.stateName (минимум 5 частей)
+        // Р”Р»СЏ mihome: mihome.0.devices.deviceType_id.stateName (РјРёРЅРёРјСѓРј 5 С‡Р°СЃС‚РµР№)
         if (fullId.startsWith("mihome.0.devices.")) {
             if (parts.size < 5) return null
-            // Берём первые 4 части: mihome.0.devices.deviceId
+            // Р‘РµСЂС‘Рј РїРµСЂРІС‹Рµ 4 С‡Р°СЃС‚Рё: mihome.0.devices.deviceId
             return parts.take(4).joinToString(".")
         }
         
@@ -165,7 +167,7 @@ class IobrokerRepositoryImpl @Inject constructor(
     }
     
     /**
-     * Парсит устройство из группы (mihome.0, tuya.0, и т.д.)
+     * РџР°СЂСЃРёС‚ СѓСЃС‚СЂРѕР№СЃС‚РІРѕ РёР· РіСЂСѓРїРїС‹ (mihome.0, tuya.0, Рё С‚.Рґ.)
      */
     private fun parseGroupDevice(
         baseId: String,
@@ -175,36 +177,36 @@ class IobrokerRepositoryImpl @Inject constructor(
     ): Device? {
         if (stateObjects.isEmpty()) return null
         
-        // Используем читаемое имя из baseId
+        // РСЃРїРѕР»СЊР·СѓРµРј С‡РёС‚Р°РµРјРѕРµ РёРјСЏ РёР· baseId
         val deviceName = extractDeviceName(baseId, groupName)
         
-        // Определяем тип устройства по ID
+        // РћРїСЂРµРґРµР»СЏРµРј С‚РёРї СѓСЃС‚СЂРѕР№СЃС‚РІР° РїРѕ ID
         val deviceType = mapDeviceType(baseId, groupName)
         
-        // Парсим состояния устройства как channels
+        // РџР°СЂСЃРёРј СЃРѕСЃС‚РѕСЏРЅРёСЏ СѓСЃС‚СЂРѕР№СЃС‚РІР° РєР°Рє channels
         val channels = mutableListOf<Device.Channel>()
         for (stateObj in stateObjects) {
-            val stateId = getJsonString(stateObj, "_id") ?: continue
+            val stateId = JsonUtils.getString(stateObj, "_id") ?: continue
             
-            // Ищем это состояние в states для получения значения
+            // РС‰РµРј СЌС‚Рѕ СЃРѕСЃС‚РѕСЏРЅРёРµ РІ states РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ Р·РЅР°С‡РµРЅРёСЏ
             val stateData = allStates[stateId] as? JsonObject
             
             val stateCommon = stateObj["common"] as? JsonObject ?: continue
-            val stateName = getJsonString(stateCommon, "name") ?: getJsonString(stateCommon, "role") ?: ""
-            val stateRole = getJsonString(stateCommon, "role") ?: ""
-            val stateType = getJsonString(stateCommon, "type") ?: ""
+            val stateName = JsonUtils.getString(stateCommon, "name") ?: JsonUtils.getString(stateCommon, "role") ?: ""
+            val stateRole = JsonUtils.getString(stateCommon, "role") ?: ""
+            val stateType = JsonUtils.getString(stateCommon, "type") ?: ""
             
             val controlType = mapControlType(stateRole, stateType, stateName)
             
-            // Получаем текущее значение из stateData (val, ack, ts)
-            val value = stateData?.get("val")?.toString()?.let { parseJsonValue(it) }
+            // РџРѕР»СѓС‡Р°РµРј С‚РµРєСѓС‰РµРµ Р·РЅР°С‡РµРЅРёРµ РёР· stateData (val, ack, ts)
+            val value = stateData?.get("val")?.toString()?.let { JsonUtils.parseValue(it) }
             val ack = stateData?.get("ack")?.toString()?.toBoolean() ?: false
             val ts = stateData?.get("ts")?.toString()?.toLongOrNull() ?: 0
-            val unit = getJsonString(stateCommon, "unit") ?: ""
+            val unit = JsonUtils.getString(stateCommon, "unit") ?: ""
             
             Log.d(TAG, "Channel $stateId: name=$stateName, value=$value, unit=$unit")
             
-            // Проверяем controlType по имени и ID канала
+            // РџСЂРѕРІРµСЂСЏРµРј controlType РїРѕ РёРјРµРЅРё Рё ID РєР°РЅР°Р»Р°
             val channelControlType = if (stateId.contains("rgb", ignoreCase = true)) {
                 ControlType.COLOR_PICKER
             } else {
@@ -226,7 +228,7 @@ class IobrokerRepositoryImpl @Inject constructor(
             )
         }
         
-        // Получаем текущее состояние устройства из первого channel с значением
+        // РџРѕР»СѓС‡Р°РµРј С‚РµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ СѓСЃС‚СЂРѕР№СЃС‚РІР° РёР· РїРµСЂРІРѕРіРѕ channel СЃ Р·РЅР°С‡РµРЅРёРµРј
         val deviceState = channels.firstOrNull { it.state != null && it.state!!.value != null }?.state
         
         return Device(
@@ -247,34 +249,34 @@ class IobrokerRepositoryImpl @Inject constructor(
     }
     
     /**
-     * Извлекает читаемое имя устройства из baseId
+     * РР·РІР»РµРєР°РµС‚ С‡РёС‚Р°РµРјРѕРµ РёРјСЏ СѓСЃС‚СЂРѕР№СЃС‚РІР° РёР· baseId
      */
     private fun extractDeviceName(baseId: String, groupName: String): String {
-        // Убираем префикс группы (mihome.0.devices. или tuya.0.)
+        // РЈР±РёСЂР°РµРј РїСЂРµС„РёРєСЃ РіСЂСѓРїРїС‹ (mihome.0.devices. РёР»Рё tuya.0.)
         val deviceId = when (groupName) {
             "mihome.0" -> baseId.substringAfter("mihome.0.devices.")
             "tuya.0" -> baseId.substringAfter("tuya.0.")
             else -> baseId.substringAfterLast(".")
         }
         
-        // Определяем тип устройства по ID
+        // РћРїСЂРµРґРµР»СЏРµРј С‚РёРї СѓСЃС‚СЂРѕР№СЃС‚РІР° РїРѕ ID
         val deviceType = when (groupName) {
             "mihome.0" -> mapMiHomeDeviceTypeName(deviceId)
             "tuya.0" -> mapTuyaDeviceTypeName(deviceId)
             else -> deviceId
         }
         
-        // Для Tuya: используем тип устройства + первые 6 символов ID
+        // Р”Р»СЏ Tuya: РёСЃРїРѕР»СЊР·СѓРµРј С‚РёРї СѓСЃС‚СЂРѕР№СЃС‚РІР° + РїРµСЂРІС‹Рµ 6 СЃРёРјРІРѕР»РѕРІ ID
         if (groupName == "tuya.0") {
-            // Убираем суффиксы типа .1, .2, -0, -1 и т.д.
+            // РЈР±РёСЂР°РµРј СЃСѓС„С„РёРєСЃС‹ С‚РёРїР° .1, .2, -0, -1 Рё С‚.Рґ.
             val cleanDeviceId = deviceId.split(".")[0].split("-")[0]
             val shortId = if (cleanDeviceId.length > 6) cleanDeviceId.take(6) else cleanDeviceId
-            // Если deviceType не определён (fallback), используем "Устройство"
-            val typeName = if (deviceType == deviceId) "Устройство" else deviceType
+            // Р•СЃР»Рё deviceType РЅРµ РѕРїСЂРµРґРµР»С‘РЅ (fallback), РёСЃРїРѕР»СЊР·СѓРµРј "РЈСЃС‚СЂРѕР№СЃС‚РІРѕ"
+            val typeName = if (deviceType == deviceId) "РЈСЃС‚СЂРѕР№СЃС‚РІРѕ" else deviceType
             return "$typeName $shortId"
         }
         
-        // Для mihome: извлекаем ID (последние символы после _)
+        // Р”Р»СЏ mihome: РёР·РІР»РµРєР°РµРј ID (РїРѕСЃР»РµРґРЅРёРµ СЃРёРјРІРѕР»С‹ РїРѕСЃР»Рµ _)
         val idPart = deviceId.substringAfter("_")
         val shortId = if (idPart.isNotEmpty() && idPart != deviceId) idPart else deviceId.takeLast(6)
         return "$deviceType $shortId"
@@ -283,31 +285,31 @@ class IobrokerRepositoryImpl @Inject constructor(
     private fun mapMiHomeDeviceTypeName(deviceId: String): String {
         return when {
             deviceId.startsWith("gateway") -> "Gateway"
-            deviceId.startsWith("sensor_ht") -> "Температура"
-            deviceId.startsWith("motion") -> "Датчик движения"
-            deviceId.startsWith("magnet") -> "Датчик открытия"
-            deviceId.startsWith("weather") -> "Погода"
-            deviceId.startsWith("switch") -> "Кнопка"
+            deviceId.startsWith("sensor_ht") -> "РўРµРјРїРµСЂР°С‚СѓСЂР°"
+            deviceId.startsWith("motion") -> "Р”Р°С‚С‡РёРє РґРІРёР¶РµРЅРёСЏ"
+            deviceId.startsWith("magnet") -> "Р”Р°С‚С‡РёРє РѕС‚РєСЂС‹С‚РёСЏ"
+            deviceId.startsWith("weather") -> "РџРѕРіРѕРґР°"
+            deviceId.startsWith("switch") -> "РљРЅРѕРїРєР°"
             else -> deviceId
         }
     }
     
     private fun mapTuyaDeviceTypeName(deviceId: String): String {
         return when {
-            deviceId.contains("light") || deviceId.contains("lamp") -> "Свет"
-            deviceId.contains("socket") || deviceId.contains("outlet") -> "Розетка"
-            deviceId.contains("switch") -> "Переключатель"
-            deviceId.contains("sensor") -> "Датчик"
-            deviceId.contains("thermostat") || deviceId.contains("temp") -> "Термостат"
-            deviceId.contains("curtain") || deviceId.contains("blind") -> "Штора"
-            deviceId.contains("camera") -> "Камера"
-            deviceId.contains("fan") -> "Вентилятор"
+            deviceId.contains("light") || deviceId.contains("lamp") -> "РЎРІРµС‚"
+            deviceId.contains("socket") || deviceId.contains("outlet") -> "Р РѕР·РµС‚РєР°"
+            deviceId.contains("switch") -> "РџРµСЂРµРєР»СЋС‡Р°С‚РµР»СЊ"
+            deviceId.contains("sensor") -> "Р”Р°С‚С‡РёРє"
+            deviceId.contains("thermostat") || deviceId.contains("temp") -> "РўРµСЂРјРѕСЃС‚Р°С‚"
+            deviceId.contains("curtain") || deviceId.contains("blind") -> "РЁС‚РѕСЂР°"
+            deviceId.contains("camera") -> "РљР°РјРµСЂР°"
+            deviceId.contains("fan") -> "Р’РµРЅС‚РёР»СЏС‚РѕСЂ"
             else -> deviceId
         }
     }
     
     /**
-     * Определяет тип устройства
+     * РћРїСЂРµРґРµР»СЏРµС‚ С‚РёРї СѓСЃС‚СЂРѕР№СЃС‚РІР°
      */
     private fun mapDeviceType(baseId: String, groupName: String): Device.DeviceType {
         return when (groupName) {
@@ -343,7 +345,7 @@ class IobrokerRepositoryImpl @Inject constructor(
     }
     
     /**
-     * Определяет тип управления
+     * РћРїСЂРµРґРµР»СЏРµС‚ С‚РёРї СѓРїСЂР°РІР»РµРЅРёСЏ
      */
     private fun mapControlType(role: String, type: String, name: String? = null): ControlType {
         val roleLower = role.lowercase()
@@ -366,7 +368,7 @@ class IobrokerRepositoryImpl @Inject constructor(
         if (type != "device" && type != "channel") return null
         
         val deviceId = obj["_id"]?.toString() ?: return null
-        val deviceName = getJsonString(common, "name") ?: deviceId
+        val deviceName = JsonUtils.getString(common, "name") ?: deviceId
         
         // Determine device type from ioBroker type
         val deviceType = mapToDeviceType(common)
@@ -374,7 +376,7 @@ class IobrokerRepositoryImpl @Inject constructor(
         
         // Find state
         var deviceState: State? = null
-        var icon = getJsonString(common, "icon")
+        var icon = JsonUtils.getString(common, "icon")
         
         // Try to get state from members
         val membersStr = common["members"]?.toString()
@@ -394,7 +396,7 @@ class IobrokerRepositoryImpl @Inject constructor(
             val stateObj = findStateChildSync(deviceId)
             if (stateObj != null) {
                 deviceState = parseStateObject(stateObj)
-                icon = getJsonString(stateObj["common"] as? JsonObject, "icon") ?: icon
+                icon = JsonUtils.getString(stateObj["common"] as? JsonObject, "icon") ?: icon
             }
         }
         
@@ -405,7 +407,7 @@ class IobrokerRepositoryImpl @Inject constructor(
             emptyList()
         }
         
-        val unit = getJsonString(common, "unit")
+        val unit = JsonUtils.getString(common, "unit")
         val unitInState = deviceState?.unit ?: unit
         
         return Device(
@@ -425,7 +427,7 @@ class IobrokerRepositoryImpl @Inject constructor(
         
         try {
             val channelPattern = "$deviceId.*"
-            val channelObjectsResponse = apiService.getObjects(channelPattern)
+            val channelObjectsResponse = apiClient.getObjects(channelPattern)
             val channelObjects = channelObjectsResponse?.filterValues { it is JsonObject }?.map { (id, obj) -> obj as JsonObject } ?: emptyList()
             
             for (channelObj in channelObjects) {
@@ -448,7 +450,7 @@ class IobrokerRepositoryImpl @Inject constructor(
         if (type != "channel") return null
         
         val channelId = obj["_id"]?.toString() ?: return null
-        val channelName = getJsonString(common, "name") ?: channelId
+        val channelName = JsonUtils.getString(common, "name") ?: channelId
         
         val controlType = mapToControlType(common)
         
@@ -484,7 +486,7 @@ class IobrokerRepositoryImpl @Inject constructor(
     private suspend fun findStateChildSync(deviceId: String): JsonObject? {
         try {
             val statePattern = "$deviceId.0" // Typical state ID pattern
-            val stateObjectsResponse = apiService.getObjects(statePattern)
+            val stateObjectsResponse = apiClient.getObjects(statePattern)
             val stateObjects = stateObjectsResponse?.filterValues { it is JsonObject }?.map { (id, obj) -> obj as JsonObject } ?: emptyList()
             return stateObjects.firstOrNull()
         } catch (e: Exception) {
@@ -494,7 +496,7 @@ class IobrokerRepositoryImpl @Inject constructor(
     
     private suspend fun getStateSync(objectId: String): State? {
         return try {
-            val iobrokerState = apiService.getState(objectId)
+            val iobrokerState = apiClient.getState(objectId)
             if (iobrokerState != null) {
                 State(
                     value = iobrokerState.value,
@@ -514,11 +516,11 @@ class IobrokerRepositoryImpl @Inject constructor(
         val common = obj["common"] as? JsonObject ?: JsonObject(emptyMap())
         
         val rawValue = obj["val"]
-        val value = parseJsonValue(rawValue?.toString())
+        val value = JsonUtils.parseValue(rawValue?.toString())
         
-        val ack = getJsonString(obj, "ack")?.toBoolean() ?: false
-        val ts = getJsonString(obj, "ts")?.toLongOrNull() ?: 0
-        val unit = getJsonString(common, "unit")
+        val ack = JsonUtils.getString(obj, "ack")?.toBoolean() ?: false
+        val ts = JsonUtils.getString(obj, "ts")?.toLongOrNull() ?: 0
+        val unit = JsonUtils.getString(common, "unit")
         
         return State(
             value = value,
@@ -528,31 +530,14 @@ class IobrokerRepositoryImpl @Inject constructor(
         )
     }
     
-    private fun parseJsonValue(str: String?): Any? {
-        if (str == null) return null
-        return when (str) {
-            "true" -> true
-            "false" -> false
-            else -> try {
-                str.toInt()
-            } catch (e: NumberFormatException) {
-                try {
-                    str.toDouble()
-                } catch (e: NumberFormatException) {
-                    str
-                }
-            }
-        }
-    }
-    
     private fun mapToDeviceType(common: JsonObject): Device.DeviceType {
-        val typeString = getJsonString(common, "type")?.lowercase()
+        val typeString = JsonUtils.getString(common, "type")?.lowercase()
         val customType = common["custom"]?.let { custom ->
             custom as? JsonObject
         }?.get("0")?.let { customObj ->
             customObj as? JsonObject
         }?.let { customObj ->
-            getJsonString(customObj, "type")
+            JsonUtils.getString(customObj, "type")
         }?.lowercase()
         
         return when (customType ?: typeString) {
@@ -567,8 +552,8 @@ class IobrokerRepositoryImpl @Inject constructor(
     }
     
     private fun mapToControlType(common: JsonObject): ControlType {
-        val role = getJsonString(common, "role")?.lowercase() ?: ""
-        val type = getJsonString(common, "type")?.lowercase() ?: ""
+        val role = JsonUtils.getString(common, "role")?.lowercase() ?: ""
+        val type = JsonUtils.getString(common, "type")?.lowercase() ?: ""
         
         return when {
             role.contains("dim.level") || role.contains("light.on") -> ControlType.SLIDER
@@ -581,17 +566,13 @@ class IobrokerRepositoryImpl @Inject constructor(
         }
     }
     
-    private fun getJsonString(obj: JsonObject?, key: String): String? {
-        return obj?.get(key)?.toString()?.trim('"')
-    }
-
     override suspend fun getDevice(deviceId: String): UiState<Device> {
         return try {
             Log.d(TAG, "Getting device $deviceId from mihome.0")
             
-            // Получаем все state объекты для этого устройства
+            // РџРѕР»СѓС‡Р°РµРј РІСЃРµ state РѕР±СЉРµРєС‚С‹ РґР»СЏ СЌС‚РѕРіРѕ СѓСЃС‚СЂРѕР№СЃС‚РІР°
             val pattern = "mihome.0.devices.*"
-            val allStates = apiService.getStates(pattern)
+            val allStates = apiClient.getStates(pattern)
             
             val deviceStates = allStates?.entries?.filterNotNull()?.filter { (stateId, _) ->
                 stateId.contains(deviceId.split(".").take(4).joinToString("."))
@@ -601,7 +582,7 @@ class IobrokerRepositoryImpl @Inject constructor(
             
             Log.d(TAG, "Found ${deviceStates.size} states for device $deviceId")
             
-            // Создаем устройство с загруженными состояниями
+            // РЎРѕР·РґР°РµРј СѓСЃС‚СЂРѕР№СЃС‚РІРѕ СЃ Р·Р°РіСЂСѓР¶РµРЅРЅС‹РјРё СЃРѕСЃС‚РѕСЏРЅРёСЏРјРё
             val device = Device(
                 id = deviceId,
                 name = deviceId.split(".").lastOrNull() ?: deviceId,
@@ -610,20 +591,20 @@ class IobrokerRepositoryImpl @Inject constructor(
                 state = null,
                 channels = deviceStates.mapNotNull { (stateId, stateObj) ->
                     val common = stateObj?.get("common") as? JsonObject ?: return@mapNotNull null
-                    val role = getJsonString(common, "role") ?: ""
+                    val role = JsonUtils.getString(common, "role") ?: ""
                     
-                    // Пропускаем battery
+                    // РџСЂРѕРїСѓСЃРєР°РµРј battery
                     if (role.contains("battery")) return@mapNotNull null
                     
-                    val value = stateObj["val"]?.toString()?.let { parseJsonValue(it) }
-                    val unit = getJsonString(common, "unit") ?: ""
-                    val name = getJsonString(common, "name") ?: stateId
+                    val value = stateObj["val"]?.toString()?.let { JsonUtils.parseValue(it) }
+                    val unit = JsonUtils.getString(common, "unit") ?: ""
+                    val name = JsonUtils.getString(common, "name") ?: stateId
                     val ts = stateObj["ts"]?.toString()?.toLongOrNull() ?: 0
                     
                     Device.Channel(
                         id = stateId,
                         name = name,
-                        controlType = mapControlType(role, getJsonString(common, "type") ?: ""),
+                        controlType = mapControlType(role, JsonUtils.getString(common, "type") ?: ""),
                         state = State(
                             value = value,
                             ack = stateObj["ack"]?.toString()?.toBoolean() ?: false,
@@ -639,15 +620,15 @@ class IobrokerRepositoryImpl @Inject constructor(
             UiState.Success(device)
         } catch (e: Exception) {
             Log.e(TAG, "Error getting device $deviceId", e)
-            UiState.Error(e.message ?: "Ошибка получения устройства")
+            UiState.Error(e.message ?: "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СѓСЃС‚СЂРѕР№СЃС‚РІР°")
         }
     }
 
     override suspend fun setState(objectId: String, value: Any, ack: Boolean): UiState<Unit> {
         return try {
             Log.d(TAG, "Setting state $objectId = $value (ack=$ack)")
-            // Используем /set/ endpoint вместо /json/set/
-            apiService.setState(objectId, value)
+            // РСЃРїРѕР»СЊР·СѓРµРј /set/ endpoint РІРјРµСЃС‚Рѕ /json/set/
+            apiClient.setState(objectId, value)
             Log.d(TAG, "State $objectId set successfully")
             UiState.Success(Unit)
         } catch (e: Exception) {
@@ -659,31 +640,31 @@ class IobrokerRepositoryImpl @Inject constructor(
     override suspend fun getAdapters(): UiState<List<AdapterInfo>> {
         return try {
             Log.d(TAG, "Getting adapters with alive status...")
-            val adapters = apiService.getAdapterList()
+            val adapters = apiClient.getAdapterList()
             Log.d(TAG, "Got ${adapters.size} active adapters: ${adapters.map { it.id }}")
             UiState.Success(adapters)
         } catch (e: Exception) {
             Log.e(TAG, "Error getting adapters", e)
-            UiState.Error(e.message ?: "Ошибка получения адаптеров")
+            UiState.Error(e.message ?: "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ Р°РґР°РїС‚РµСЂРѕРІ")
         }
     }
 
     override suspend fun getDevicesFromAdapter(adapterId: String): UiState<List<Device>> {
         return try {
             Log.d(TAG, "Getting devices from adapter: $adapterId...")
-            val devices = apiService.getAdapterDevices(adapterId)
+            val devices = apiClient.getAdapterDevices(adapterId)
             Log.d(TAG, "Got ${devices.size} devices from adapter $adapterId")
             UiState.Success(devices)
         } catch (e: Exception) {
             Log.e(TAG, "Error getting devices from adapter $adapterId", e)
-            UiState.Error(e.message ?: "Ошибка получения устройств из адаптера")
+            UiState.Error(e.message ?: "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СѓСЃС‚СЂРѕР№СЃС‚РІ РёР· Р°РґР°РїС‚РµСЂР°")
         }
     }
 
     override suspend fun getSensors(): UiState<List<Sensor>> {
         return try {
-            // Получаем все state объекты из mihome.0
-            val allStates = apiService.getStates("mihome.0.devices.*")
+            // РџРѕР»СѓС‡Р°РµРј РІСЃРµ state РѕР±СЉРµРєС‚С‹ РёР· mihome.0
+            val allStates = apiClient.getStates("mihome.0.devices.*")
             Log.d(TAG, "Got states from mihome.0: ${allStates?.keys?.size}")
             
             val sensors = mutableListOf<Sensor>()
@@ -693,16 +674,16 @@ class IobrokerRepositoryImpl @Inject constructor(
                     val stateData = stateObj as? JsonObject ?: continue
                     val common = stateData["common"] as? JsonObject ?: continue
                     
-                    val role = getJsonString(common, "role") ?: ""
+                    val role = JsonUtils.getString(common, "role") ?: ""
                     val sensorType = mapMiHomeSensorType(role)
                     
-                    // Пропускаем battery и non-sensor states
+                    // РџСЂРѕРїСѓСЃРєР°РµРј battery Рё non-sensor states
                     if (sensorType == null || role.contains("battery")) continue
                     
-                    // Получаем текущее значение
-                    val value = stateData["val"]?.toString()?.let { parseJsonValue(it) }
-                    val unit = getJsonString(common, "unit") ?: ""
-                    val name = getJsonString(common, "name") ?: stateId
+                    // РџРѕР»СѓС‡Р°РµРј С‚РµРєСѓС‰РµРµ Р·РЅР°С‡РµРЅРёРµ
+                    val value = stateData["val"]?.toString()?.let { JsonUtils.parseValue(it) }
+                    val unit = JsonUtils.getString(common, "unit") ?: ""
+                    val name = JsonUtils.getString(common, "name") ?: stateId
                     val ts = stateData["ts"]?.toString()?.toLongOrNull() ?: 0
                     
                     sensors.add(
@@ -722,12 +703,12 @@ class IobrokerRepositoryImpl @Inject constructor(
             UiState.Success(sensors)
         } catch (e: Exception) {
             Log.e(TAG, "Error getting sensors", e)
-            UiState.Error(e.message ?: "Ошибка получения датчиков")
+            UiState.Error(e.message ?: "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РґР°С‚С‡РёРєРѕРІ")
         }
     }
     
     /**
-     * Определяет тип датчика mihome по role
+     * РћРїСЂРµРґРµР»СЏРµС‚ С‚РёРї РґР°С‚С‡РёРєР° mihome РїРѕ role
      */
     private fun mapMiHomeSensorType(role: String): Sensor.SensorType? {
         val roleLower = role.lowercase()
@@ -744,8 +725,8 @@ class IobrokerRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getScenarios(): UiState<List<Scenario>> {
-        // В mihome.0 нет традиционных сценариев
-        // Можно добавить сценарии позже через ioBroker adapter scenarios
+        // Р’ mihome.0 РЅРµС‚ С‚СЂР°РґРёС†РёРѕРЅРЅС‹С… СЃС†РµРЅР°СЂРёРµРІ
+        // РњРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ СЃС†РµРЅР°СЂРёРё РїРѕР·Р¶Рµ С‡РµСЂРµР· ioBroker adapter scenarios
         return UiState.Success(emptyList())
     }
 
@@ -753,3 +734,5 @@ class IobrokerRepositoryImpl @Inject constructor(
         return UiState.Success(Unit)
     }
 }
+
+

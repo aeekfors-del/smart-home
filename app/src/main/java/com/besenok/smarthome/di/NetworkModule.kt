@@ -2,8 +2,11 @@ package com.besenok.smarthome.di
 
 import android.content.Context
 import com.besenok.smarthome.data.local.datastore.AppPreferencesDataSource
-import com.besenok.smarthome.data.remote.iobroker.IobrokerApiService
-import com.besenok.smarthome.data.remote.iobroker.IobrokerWebSocketClient
+import com.besenok.smarthome.data.remote.iobroker.AdapterService
+import com.besenok.smarthome.data.remote.iobroker.DeviceClassifier
+import com.besenok.smarthome.data.remote.iobroker.DeviceParser
+import com.besenok.smarthome.data.remote.iobroker.IobrokerApiClient
+import com.besenok.smarthome.data.remote.iobroker.IobrokerRestClient
 import com.besenok.smarthome.data.remote.weather.WeatherApiService
 import com.besenok.smarthome.data.remote.time.TimeApiService
 import com.besenok.smarthome.data.repository.IobrokerRepositoryImpl
@@ -72,6 +75,28 @@ object NetworkModule {
             }
         }
     }
+
+    @Provides
+    @Singleton
+    fun provideAdapterService(): AdapterService = AdapterService()
+
+    @Provides
+    @Singleton
+    fun provideDeviceParser(): DeviceParser = DeviceParser()
+
+    @Provides
+    @Singleton
+    fun provideDeviceClassifier(): DeviceClassifier = DeviceClassifier()
+
+    @Provides
+    @Singleton
+    fun provideIobrokerApiClient(
+        restClient: IobrokerRestClient,
+        adapterService: AdapterService,
+        deviceParser: DeviceParser,
+        deviceClassifier: DeviceClassifier,
+        json: Json
+    ): IobrokerApiClient = IobrokerApiClient(restClient, adapterService, deviceParser, deviceClassifier, json)
 
     @Provides
     @Singleton

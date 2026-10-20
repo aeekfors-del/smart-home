@@ -25,7 +25,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import javax.net.ssl.*
 
-private const val TAG = "IobrokerWebSocketClient"
+private const val TAG = "IobrokerRestClient"
 
 data class IobrokerState(
     val value: Any? = null,
@@ -53,10 +53,11 @@ data class IobrokerVersionResponse(
 )
 
 @Singleton
-class IobrokerWebSocketClient @Inject constructor(
+class IobrokerRestClient @Inject constructor(
     private val preferences: AppPreferencesDataSource,
     private val authTokenService: AuthTokenService,
-    private val json: Json
+    private val json: Json,
+    private val rateLimiter: RateLimiter
 ) {
 
     private val _connectionState: MutableStateFlow<ConnectionState> = MutableStateFlow(ConnectionState.Disconnected)
@@ -66,9 +67,6 @@ class IobrokerWebSocketClient @Inject constructor(
     private var currentSession: String? = null
     private var httpClient: HttpClient? = null
     private var isLoggedIn = false
-    
-    // Rate limiter: 10 запросов в секунду
-    private val rateLimiter = RateLimiter(maxRequests = 10, windowSeconds = 1)
 
     suspend fun connect() {
         if (_connectionState.value is ConnectionState.Connected) return

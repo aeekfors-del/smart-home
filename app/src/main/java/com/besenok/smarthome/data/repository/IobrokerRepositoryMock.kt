@@ -3,8 +3,6 @@ package com.besenok.smarthome.data.repository
 import com.besenok.smarthome.data.local.datastore.AppPreferencesDataSource
 import com.besenok.smarthome.data.local.room.dao.DeviceStateDao
 import com.besenok.smarthome.data.local.room.dao.ScenarioDao
-import com.besenok.smarthome.data.remote.iobroker.IobrokerApiService
-import com.besenok.smarthome.data.remote.iobroker.IobrokerWebSocketClient
 import com.besenok.smarthome.domain.model.AdapterInfo
 import com.besenok.smarthome.domain.model.ControlType
 import com.besenok.smarthome.domain.model.Device
