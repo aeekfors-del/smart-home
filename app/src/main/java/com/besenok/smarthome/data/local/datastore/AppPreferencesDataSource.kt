@@ -123,8 +123,8 @@ class AppPreferencesDataSource(private val context: Context) {
     }
 
     val iobrokerPassword: Flow<String> = context.dataStore.data.map { preferences ->
-        val encrypted = preferences[IOBROKER_PASSWORD] ?: ""
-        CryptoHelper.decrypt(encrypted)
+        // Возвращаем зашифрованное значение как есть, расшифровка происходит при чтении
+        preferences[IOBROKER_PASSWORD] ?: ""
     }
 
     val weatherRegion: Flow<String> = context.dataStore.data.map { preferences ->
