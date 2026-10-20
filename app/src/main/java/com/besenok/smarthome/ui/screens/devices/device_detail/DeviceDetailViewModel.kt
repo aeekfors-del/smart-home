@@ -82,12 +82,6 @@ class DeviceDetailViewModel @Inject constructor(
             
             Log.d(TAG, "Loading device directly from adapter: $adapterId")
             
-            // Получаем все states для этого устройства
-            val statesResponse = com.besenok.smarthome.data.remote.iobroker.IobrokerWebSocketClient(
-                TODO(),
-                TODO()
-            )
-            
             // Fallback: создаём простое устройство из deviceId
             Log.d(TAG, "Creating device from deviceId: $deviceId")
             val device = com.besenok.smarthome.domain.model.Device(
