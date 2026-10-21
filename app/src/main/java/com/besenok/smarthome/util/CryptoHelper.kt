@@ -19,22 +19,13 @@ object CryptoHelper {
     private const val GCM_IV_LENGTH = 12 // bytes
     private const val GCM_TAG_LENGTH = 128 // bits
 
-    private val cipher: Cipher by lazy {
-        Cipher.getInstance(TRANSFORMATION)
-    }
+    // Cipher не потокобезопасен - создаём новый экземпляр на каждую операцию
+    private fun newCipher(): Cipher = Cipher.getInstance(TRANSFORMATION)
 
     /**
      * Генерирует ключ в Android Keystore
      */
     private fun initKeyGenerator(): KeyGenerator {
-        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply {
-            load(null)
-        }
-
-        if (keyStore.containsAlias(KEY_ALIAS)) {
-            return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
-        }
-
         val keyGenerator = KeyGenerator.getInstance(
             KeyProperties.KEY_ALGORITHM_AES,
             "AndroidKeyStore"
@@ -56,6 +47,7 @@ object CryptoHelper {
     /**
      * Получает секретный ключ из Keystore, инициализирует если отсутствует
      */
+    @Synchronized
     private fun getSecretKey(): SecretKey {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply {
             load(null)
@@ -77,6 +69,7 @@ object CryptoHelper {
         if (plainText.isEmpty()) return ""
 
         val key = getSecretKey()
+        val cipher = newCipher()
         cipher.init(Cipher.ENCRYPT_MODE, key)
         val iv = cipher.iv
 
@@ -105,6 +98,7 @@ object CryptoHelper {
             val iv = combined.copyOfRange(0, GCM_IV_LENGTH)
             val encrypted = combined.copyOfRange(GCM_IV_LENGTH, combined.size)
 
+            val cipher = newCipher()
             cipher.init(
                 Cipher.DECRYPT_MODE,
                 key,
@@ -114,7 +108,8 @@ object CryptoHelper {
             val decrypted = cipher.doFinal(encrypted)
             return String(decrypted, Charsets.UTF_8)
         } catch (e: Exception) {
-            // Если ключ не найден или данные повреждены
+            // Если ключ не найден или данные повреждены (содержимое не логируем)
+            android.util.Log.w("CryptoHelper", "Decrypt failed: ${e.javaClass.simpleName}")
             return ""
         }
     }

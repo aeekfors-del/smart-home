@@ -1,3 +1,16 @@
+import java.util.Properties
+
+// Секреты берутся из local.properties (не коммитится) или переменных окружения
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+fun secret(key: String, env: String): String =
+    (localProps.getProperty(key) ?: System.getenv(env) ?: "")
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -19,6 +32,10 @@ android {
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // local.properties: openweathermap.api.key=..., iobroker.default.host=...
+        buildConfigField("String", "OPENWEATHERMAP_API_KEY", "\"${secret("openweathermap.api.key", "OPENWEATHERMAP_API_KEY")}\"")
+        buildConfigField("String", "IOBROKER_DEFAULT_HOST", "\"${secret("iobroker.default.host", "IOBROKER_DEFAULT_HOST")}\"")
+
         // Оптимизация для Raspberry Pi 5 (ARM64)
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -32,8 +49,20 @@ android {
         }
     }
 
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {

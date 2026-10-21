@@ -26,6 +26,7 @@ import javax.inject.Singleton
 import javax.net.ssl.*
 
 private const val TAG = "IobrokerRestClient"
+private const val REST_PORT = 8087
 
 data class IobrokerState(
     val value: Any? = null,
@@ -70,22 +71,65 @@ class IobrokerRestClient @Inject constructor(
     /**
      * Создает Basic Auth заголовок из сохраненных учетных данных
      */
+    private data class AuthCache(val username: String, val encryptedPassword: String, val header: String?)
+
+    @Volatile
+    private var authCache: AuthCache? = null
+
+    /**
+     * Создает Basic Auth заголовок из сохраненных учетных данных.
+     * Заголовок кешируется: расшифровка (Keystore) выполняется только при изменении логина/пароля.
+     */
     private suspend fun getBasicAuthHeader(): String? {
         return try {
             val username = preferences.iobrokerUsername.first()
-            val password = CryptoHelper.decrypt(preferences.iobrokerPassword.first())
-            if (username.isNotBlank() && password.isNotBlank()) {
-                val credentials = "$username:$password"
-                val encoded = Base64.encodeToString(credentials.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+            val encryptedPassword = preferences.iobrokerPassword.first()
+
+            authCache?.let {
+                if (it.username == username && it.encryptedPassword == encryptedPassword) return it.header
+            }
+
+            val password = CryptoHelper.decrypt(encryptedPassword)
+            val header = if (username.isNotBlank() && password.isNotBlank()) {
+                val encoded = Base64.encodeToString("$username:$password".toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
                 "Basic $encoded"
             } else {
                 Log.w(TAG, "Username or password is blank")
                 null
             }
+            authCache = AuthCache(username, encryptedPassword, header)
+            header
         } catch (e: Exception) {
             Log.e(TAG, "Error creating Basic Auth header", e)
             null
         }
+    }
+
+    /**
+     * Строит запрос к REST API ioBroker с корректным кодированием пути и параметров
+     */
+    private fun HttpRequestBuilder.restUrl(
+        host: String,
+        authHeader: String,
+        vararg segments: String,
+        params: List<Pair<String, String>> = emptyList()
+    ) {
+        url {
+            protocol = URLProtocol.HTTPS
+            this.host = host
+            port = REST_PORT
+            appendPathSegments(*segments, encodeSlash = true)
+            params.forEach { (k, v) -> parameters.append(k, v) }
+        }
+        header(HttpHeaders.Authorization, authHeader)
+        header(HttpHeaders.Accept, "application/json")
+    }
+
+    /** Значение для параметра value: строки - корректный JSON-литерал (с экранированием) */
+    private fun encodeValue(value: Any): String = when (value) {
+        is Boolean -> if (value) "true" else "false"
+        is String -> JsonPrimitive(value).toString()
+        else -> value.toString()
     }
 
     suspend fun connect() {
@@ -102,8 +146,8 @@ class IobrokerRestClient @Inject constructor(
                 return
             }
 
-            val restPort = "8087"
-
+            // Сервер ioBroker в локальной сети использует самоподписанный сертификат:
+            // проверка сертификата здесь отключена осознанно, клиент ходит только на адрес из настроек
             val sslContext = SSLContext.getInstance("TLS")
             val trustAllCerts = arrayOf<TrustManager>(
                 object : X509TrustManager {
@@ -128,21 +172,21 @@ class IobrokerRestClient @Inject constructor(
                 }
             }
 
+            // Закрываем предыдущий клиент, чтобы не копились пулы соединений
+            httpClient?.close()
             httpClient = client
             currentSession = "session-${System.currentTimeMillis()}"
 
             // Аутентификация через Basic Auth
             val authHeader = getBasicAuthHeader()
             if (authHeader != null) {
-                val response = client.get("https://$host:$restPort/json/getPlainValue/system.adapter.admin.0.alive") {
-                    header(HttpHeaders.Authorization, authHeader)
-                    header(HttpHeaders.ContentType, "application/json")
-                    header(HttpHeaders.Accept, "application/json")
+                val response = client.get {
+                    restUrl(host, authHeader, "json", "getPlainValue", "system.adapter.admin.0.alive")
                 }
                 
                 if (response.status.value in 200..299) {
                     isLoggedIn = true
-                    _connectionState.value = ConnectionState.Connected("Connected to $host:$restPort")
+                    _connectionState.value = ConnectionState.Connected("Connected to $host:$REST_PORT")
                     startKeepAlive()
                 } else {
                     _connectionState.value = ConnectionState.Error("Аутентификация не удалась")
@@ -168,15 +212,12 @@ class IobrokerRestClient @Inject constructor(
                 try {
                     val client = httpClient ?: continue
                     val host = preferences.iobrokerHost.first()
-                    val restPort = "8087"
                     
                     val authHeader = getBasicAuthHeader()
                     if (authHeader != null) {
                         try {
-                            client.get("https://$host:$restPort/json/getPlainValue/system.adapter.admin.0.alive") {
-                                header(HttpHeaders.Authorization, authHeader)
-                                header(HttpHeaders.ContentType, "application/json")
-                                header(HttpHeaders.Accept, "application/json")
+                            client.get {
+                                restUrl(host, authHeader, "json", "getPlainValue", "system.adapter.admin.0.alive")
                             }
                         } catch (e: Exception) {
                             _connectionState.value = ConnectionState.Error("Потеряно соединение")
@@ -203,7 +244,6 @@ class IobrokerRestClient @Inject constructor(
             
             val client = httpClient ?: throw IllegalStateException("Not connected")
             val host = preferences.iobrokerHost.first()
-            val restPort = "8087"
             
             val authHeader = getBasicAuthHeader()
             if (authHeader == null) {
@@ -211,13 +251,9 @@ class IobrokerRestClient @Inject constructor(
                 return null
             }
             
-            val plainValue: String = client.get("https://$host:$restPort/json/getPlainValue/$objectId") {
-                header(HttpHeaders.Authorization, authHeader)
-                header(HttpHeaders.ContentType, "application/json")
-                header(HttpHeaders.Accept, "application/json")
+            val plainValue: String = client.get {
+                restUrl(host, authHeader, "json", "getPlainValue", objectId)
             }.body()
-            
-            Log.d(TAG, "getState($objectId) = $plainValue")
             
             val value = parsePlainValue(plainValue)
             IobrokerState(value = value, ack = true, ts = System.currentTimeMillis().toInt())
@@ -246,7 +282,6 @@ class IobrokerRestClient @Inject constructor(
             
             val client = httpClient ?: throw IllegalStateException("Not connected")
             val host = preferences.iobrokerHost.first()
-            val restPort = "8087"
             
             val authHeader = getBasicAuthHeader()
             if (authHeader == null) {
@@ -254,27 +289,18 @@ class IobrokerRestClient @Inject constructor(
                 throw Exception("No valid auth credentials")
             }
             
-            val valueStr = when (value) {
-                is Boolean -> if (value) "true" else "false"
-                is String -> "\"$value\""
-                else -> value.toString()
-            }
-
-            val encodedObjectId = java.net.URLEncoder.encode(objectId, "UTF-8")
-            val url = "https://$host:$restPort/json/set/$encodedObjectId?value=$valueStr"
-            
-            Log.d(TAG, "setState REST URL: $url")
-            val response = client.get(url) {
-                header(HttpHeaders.Authorization, authHeader)
-                header(HttpHeaders.ContentType, "application/json")
-                header(HttpHeaders.Accept, "application/json")
+            val response = client.get {
+                restUrl(
+                    host, authHeader, "json", "set", objectId,
+                    params = listOf("value" to encodeValue(value))
+                )
             }
             
             Log.d(TAG, "setState REST response status: ${response.status}")
             
             if (response.status.value !in 200..299) {
-                val errorBody = response.body<String>() ?: "Unknown error"
-                Log.e(TAG, "setState REST failed: $errorBody")
+                val errorBody = response.body<String>()
+                Log.e(TAG, "setState REST failed: status=${response.status}")
                 throw Exception("setState REST failed: $errorBody")
             }
         } catch (e: Exception) {
@@ -289,7 +315,6 @@ class IobrokerRestClient @Inject constructor(
             
             val client = httpClient ?: throw IllegalStateException("Not connected")
             val host = preferences.iobrokerHost.first()
-            val restPort = "8087"
             
             val authHeader = getBasicAuthHeader()
             if (authHeader == null) {
@@ -297,27 +322,18 @@ class IobrokerRestClient @Inject constructor(
                 throw Exception("No valid auth credentials")
             }
             
-            val valueJson = when (value) {
-                is Boolean -> if (value) "true" else "false"
-                is String -> "\"$value\""
-                else -> value.toString()
-            }
-            
-            val encodedObjectId = java.net.URLEncoder.encode(objectId, "UTF-8")
-            val url = "https://$host:$restPort/set/$encodedObjectId?value=$valueJson&ack=$ack"
-            
-            Log.d(TAG, "setState REST URL: $url")
-            val response = client.get(url) {
-                header(HttpHeaders.Authorization, authHeader)
-                header(HttpHeaders.ContentType, "application/json")
-                header(HttpHeaders.Accept, "application/json")
+            val response = client.get {
+                restUrl(
+                    host, authHeader, "set", objectId,
+                    params = listOf("value" to encodeValue(value), "ack" to ack.toString())
+                )
             }
             
             Log.d(TAG, "setState REST response status: ${response.status}")
             
             if (response.status.value !in 200..299) {
-                val errorBody = response.body<String>() ?: "Unknown error"
-                Log.e(TAG, "setState REST failed: $errorBody")
+                val errorBody = response.body<String>()
+                Log.e(TAG, "setState REST failed: status=${response.status}")
                 throw Exception("setState REST failed: $errorBody")
             }
         } catch (e: Exception) {
@@ -332,7 +348,6 @@ class IobrokerRestClient @Inject constructor(
             
             val client = httpClient ?: throw IllegalStateException("Not connected")
             val host = preferences.iobrokerHost.first()
-            val restPort = "8087"
             
             val authHeader = getBasicAuthHeader()
             if (authHeader == null) {
@@ -340,10 +355,8 @@ class IobrokerRestClient @Inject constructor(
                 return null
             }
             
-            val response: JsonObject = client.get("https://$host:$restPort/json/get/$objectId") {
-                header(HttpHeaders.Authorization, authHeader)
-                header(HttpHeaders.ContentType, "application/json")
-                header(HttpHeaders.Accept, "application/json")
+            val response: JsonObject = client.get {
+                restUrl(host, authHeader, "json", "get", objectId)
             }.body()
             
             Log.d(TAG, "getObject($objectId) = ${response.keys}")
@@ -367,7 +380,6 @@ class IobrokerRestClient @Inject constructor(
                 return null
             }
             val host = preferences.iobrokerHost.first()
-            val restPort = "8087"
             
             val authHeader = getBasicAuthHeader()
             if (authHeader == null) {
@@ -375,9 +387,8 @@ class IobrokerRestClient @Inject constructor(
                 return null
             }
             
-            val response: JsonObject = client.get("https://$host:$restPort/objects?pattern=$pattern") {
-                header(HttpHeaders.Authorization, authHeader)
-                header(HttpHeaders.Accept, "application/json")
+            val response: JsonObject = client.get {
+                restUrl(host, authHeader, "objects", params = listOf("pattern" to pattern))
             }.body()
             
             Log.d(TAG, "Raw response keys: ${response.keys.take(10)}")
@@ -401,7 +412,6 @@ class IobrokerRestClient @Inject constructor(
                 return null
             }
             val host = preferences.iobrokerHost.first()
-            val restPort = "8087"
             
             val authHeader = getBasicAuthHeader()
             if (authHeader == null) {
@@ -409,9 +419,8 @@ class IobrokerRestClient @Inject constructor(
                 return null
             }
             
-            val response: JsonObject = client.get("https://$host:$restPort/states?pattern=$pattern") {
-                header(HttpHeaders.Authorization, authHeader)
-                header(HttpHeaders.Accept, "application/json")
+            val response: JsonObject = client.get {
+                restUrl(host, authHeader, "states", params = listOf("pattern" to pattern))
             }.body()
             
             Log.d(TAG, "Raw states response keys: ${response.keys.take(10)}")

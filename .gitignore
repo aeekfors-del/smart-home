@@ -59,3 +59,6 @@ import-log.xml
 
 # Stash
 *.patch
+
+# IDE plugin settings
+.gigaide/

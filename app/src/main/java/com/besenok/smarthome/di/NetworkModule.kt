@@ -56,6 +56,7 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideHttpClient(): HttpClient {
+        // Осознанное решение: ioBroker в локальной сети работает с самоподписанным сертификатом
         val trustAllCerts = arrayOf<TrustManager>(
             object : X509TrustManager {
                 override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()

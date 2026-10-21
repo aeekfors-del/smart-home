@@ -32,7 +32,7 @@ fun SettingsScreen(
     val host by viewModel.host.collectAsState()
     val port by viewModel.port.collectAsState()
     val username by viewModel.username.collectAsState()
-    val password by viewModel.password.collectAsState()
+    val hasPassword by viewModel.hasPassword.collectAsState()
     val weatherRegionName by viewModel.weatherRegionName.collectAsState()
     val weatherRegion by viewModel.weatherRegion.collectAsState()
     val weatherRegions = viewModel.weatherRegions
@@ -50,14 +50,14 @@ fun SettingsScreen(
     var localHost by remember { mutableStateOf(host) }
     var localPort by remember { mutableStateOf(port) }
     var localUsername by remember { mutableStateOf(username) }
-    var localPassword by remember { mutableStateOf(password) }
+    // Пустое значение = не менять сохранённый пароль
+    var localPassword by remember { mutableStateOf("") }
     var localOpenWeatherMapApiKey by remember { mutableStateOf(openWeatherMapApiKey) }
 
     // Update local state only when ViewModel changes (e.g., after save)
     DisposableEffect(host) { localHost = host; onDispose {} }
     DisposableEffect(port) { localPort = port; onDispose {} }
     DisposableEffect(username) { localUsername = username; onDispose {} }
-    DisposableEffect(password) { localPassword = password; onDispose {} }
     DisposableEffect(openWeatherMapApiKey) { localOpenWeatherMapApiKey = openWeatherMapApiKey; onDispose {} }
 
     if (showRegionDialog) {
@@ -80,6 +80,7 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.saveIoBrokerSettings(localHost, localPort, localUsername, localPassword)
+                    localPassword = ""
                     viewModel.saveOpenWeatherMapApiKey(localOpenWeatherMapApiKey)
                     showSaveDialog = false
                 }) {
@@ -183,7 +184,13 @@ fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
-                            supportingText = { Text("Пароль для доступа к ioBroker") }
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            supportingText = {
+                                Text(
+                                    if (hasPassword) "Пароль сохранён. Оставьте пустым, чтобы не менять"
+                                    else "Пароль для доступа к ioBroker"
+                                )
+                            }
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))

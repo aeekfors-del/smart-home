@@ -12,7 +12,7 @@ class TimeApiService @Inject constructor(
     private val httpClient: HttpClient
 ) {
     private companion object {
-        const val BASE_URL = "http://worldtimeapi.org/api"
+        const val BASE_URL = "https://worldtimeapi.org/api"
     }
 
     suspend fun getCurrentTime(): TimeResponse {

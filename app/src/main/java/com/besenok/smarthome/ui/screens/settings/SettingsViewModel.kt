@@ -29,8 +29,9 @@ class SettingsViewModel @Inject constructor(
     private val _username = preferences.iobrokerUsername.stateIn(viewModelScope, SharingStarted.Eagerly, "")
     val username: StateFlow<String> = _username
 
-    private val _password = preferences.iobrokerPassword.stateIn(viewModelScope, SharingStarted.Eagerly, "")
-    val password: StateFlow<String> = _password
+    // Пароль (и его шифртекст) в UI не передаётся - только признак того, что он сохранён
+    val hasPassword: StateFlow<Boolean> = preferences.hasIobrokerPassword
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // Weather settings
     private val _weatherRegion = preferences.weatherRegion.stateIn(viewModelScope, SharingStarted.Eagerly, AppPreferencesDataSource.DEFAULT_WEATHER_REGION)

@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.besenok.smarthome.BuildConfig
 import com.besenok.smarthome.util.CryptoHelper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -35,14 +36,12 @@ class AppPreferencesDataSource(private val context: Context) {
         // Auth
         val IS_AUTHENTICATED = booleanPreferencesKey("is_authenticated")
 
-        // Defaults
-        val DEFAULT_HOST = "10.10.100.14"
+        // Defaults (секреты в коде не хранятся: значения задаются через local.properties/BuildConfig)
+        val DEFAULT_HOST: String = BuildConfig.IOBROKER_DEFAULT_HOST
         val DEFAULT_PORT = "8081"
-        val DEFAULT_USERNAME = "admin"
-        val DEFAULT_PASSWORD = "TB56GdWl"
         val DEFAULT_WEATHER_REGION = "55.7558,37.6173" // Moscow
         val DEFAULT_APP_THEME = "SYSTEM" // LIGHT, DARK, SYSTEM
-        val DEFAULT_OPENWEATHERMAP_API_KEY = "7f3d55711a814fd0f8fb56f4ed85c42e" // OpenWeatherMap API key
+        val DEFAULT_OPENWEATHERMAP_API_KEY: String = BuildConfig.OPENWEATHERMAP_API_KEY
 
         // Device names storage keys
         const val DEVICE_NAMES_PREFIX = "device_name_"
@@ -123,8 +122,13 @@ class AppPreferencesDataSource(private val context: Context) {
     }
 
     val iobrokerPassword: Flow<String> = context.dataStore.data.map { preferences ->
-        // Возвращаем зашифрованное значение как есть, расшифровка происходит при чтении
+        // Зашифрованное значение. Только для внутреннего использования сетевым слоем (расшифровка в CryptoHelper)
         preferences[IOBROKER_PASSWORD] ?: ""
+    }
+
+    /** Задан ли пароль (сам пароль/шифртекст в UI не передаётся) */
+    val hasIobrokerPassword: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        !preferences[IOBROKER_PASSWORD].isNullOrEmpty()
     }
 
     val weatherRegion: Flow<String> = context.dataStore.data.map { preferences ->
@@ -136,20 +140,26 @@ class AppPreferencesDataSource(private val context: Context) {
     }
 
     val openweathermapApiKey: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[OPENWEATHERMAP_API_KEY] ?: DEFAULT_OPENWEATHERMAP_API_KEY
+        // Ключ по умолчанию из BuildConfig в UI не показываем; fallback применяется в WeatherApiService
+        preferences[OPENWEATHERMAP_API_KEY] ?: ""
     }
 
     val isAuthenticated: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[IS_AUTHENTICATED] ?: false
     }
 
+    /**
+     * @param password новый пароль в открытом виде; пустая строка = не менять сохранённый
+     */
     suspend fun saveIoBrokerSettings(host: String, port: String, username: String, password: String) {
-        val encryptedPassword = CryptoHelper.encrypt(password)
+        val encryptedPassword = if (password.isNotEmpty()) CryptoHelper.encrypt(password) else null
         context.dataStore.edit { preferences ->
             preferences[IOBROKER_HOST] = host
             preferences[IOBROKER_PORT] = port
             preferences[IOBROKER_USERNAME] = username
-            preferences[IOBROKER_PASSWORD] = encryptedPassword
+            if (encryptedPassword != null) {
+                preferences[IOBROKER_PASSWORD] = encryptedPassword
+            }
         }
     }
 
