@@ -8,22 +8,15 @@ import com.besenok.smarthome.util.CryptoHelper
 import com.besenok.smarthome.util.RateLimiter
 import io.ktor.client.*
 import io.ktor.client.call.*
-import io.ktor.client.engine.okhttp.*
-import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
-import java.security.SecureRandom
-import java.security.cert.X509Certificate
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
-import javax.net.ssl.*
 
 private const val TAG = "IobrokerRestClient"
 private const val REST_PORT = 8087
@@ -56,15 +49,13 @@ data class IobrokerVersionResponse(
 @Singleton
 class IobrokerRestClient @Inject constructor(
     private val preferences: AppPreferencesDataSource,
-    private val json: Json,
-    private val rateLimiter: RateLimiter
+    private val rateLimiter: RateLimiter,
+    // Единый клиент на всё приложение (пул соединений и потоки не пересоздаются)
+    private val httpClient: HttpClient
 ) {
 
     private val _connectionState: MutableStateFlow<ConnectionState> = MutableStateFlow(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState
-
-    @Volatile
-    private var httpClient: HttpClient? = null
 
     @Volatile
     private var isLoggedIn = false
@@ -151,49 +142,20 @@ class IobrokerRestClient @Inject constructor(
 
         try {
             val host = preferences.iobrokerHost.first()
-            val port = preferences.iobrokerPort.first()
 
             if (host.isBlank()) {
                 _connectionState.value = ConnectionState.Error("Укажите адрес ioBroker в настройках")
                 return
             }
 
-            // Сервер ioBroker в локальной сети использует самоподписанный сертификат:
-            // проверка сертификата здесь отключена осознанно, клиент ходит только на адрес из настроек
-            val sslContext = SSLContext.getInstance("TLS")
-            val trustAllCerts = arrayOf<TrustManager>(
-                object : X509TrustManager {
-                    override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
-                    override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-                    override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-                }
-            )
-            sslContext.init(null, trustAllCerts, SecureRandom())
-
-            val client = HttpClient(OkHttp) {
-                engine {
-                    config {
-                        sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
-                        hostnameVerifier { _, _ -> true }
-                        connectTimeout(10, TimeUnit.SECONDS)
-                        readTimeout(10, TimeUnit.SECONDS)
-                    }
-                }
-                install(ContentNegotiation) {
-                    json(json)
-                }
-            }
-
-            // Атомарно обновляем httpClient и isLoggedIn
-            httpClient?.close()
-            httpClient = client
+            // Клиент уже настроен в NetworkModule (включая доверие самоподписанному сертификату)
             isLoggedIn = true
             currentSession = "session-${System.currentTimeMillis()}"
 
             // Аутентификация через Basic Auth
             val authHeader = getBasicAuthHeader()
             if (authHeader != null) {
-                val response = client.get {
+                val response = httpClient.get {
                     restUrl(host, authHeader, "json", "get", params = listOf("get" to "system.adapter.admin.0.alive"))
                 }
                 
@@ -226,13 +188,12 @@ class IobrokerRestClient @Inject constructor(
                 delay(30000)
                 
                 try {
-                    val client = httpClient ?: continue
                     val host = preferences.iobrokerHost.first()
                     
                     val authHeader = getBasicAuthHeader()
                     if (authHeader != null) {
                         try {
-                            client.get {
+                            httpClient.get {
                                 restUrl(host, authHeader, "json", "get", params = listOf("get" to "system.adapter.admin.0.alive"))
                             }
                         } catch (e: Exception) {
@@ -261,7 +222,7 @@ class IobrokerRestClient @Inject constructor(
         return try {
             rateLimiter.acquire()
             
-            val client = httpClient ?: throw IllegalStateException("Not connected")
+            if (!isLoggedIn) throw IllegalStateException("Not connected")
             val host = preferences.iobrokerHost.first()
             
             val authHeader = getBasicAuthHeader()
@@ -270,7 +231,7 @@ class IobrokerRestClient @Inject constructor(
                 return null
             }
             
-            val response = client.get {
+            val response =             httpClient.get {
                 restUrl(host, authHeader, "json", "get", params = listOf("get" to objectId))
             }
 
@@ -327,7 +288,7 @@ class IobrokerRestClient @Inject constructor(
         try {
             rateLimiter.acquire()
             
-            val client = httpClient ?: throw IllegalStateException("Not connected")
+            if (!isLoggedIn) throw IllegalStateException("Not connected")
             val host = preferences.iobrokerHost.first()
             
             val authHeader = getBasicAuthHeader()
@@ -336,7 +297,7 @@ class IobrokerRestClient @Inject constructor(
                 throw Exception("No valid auth credentials")
             }
             
-            val response = client.get {
+            val response =             httpClient.get {
                 restUrl(
                     host, authHeader, "json", "set", objectId,
                     params = listOf("value" to encodeValue(value))
@@ -360,7 +321,7 @@ class IobrokerRestClient @Inject constructor(
         try {
             rateLimiter.acquire()
             
-            val client = httpClient ?: throw IllegalStateException("Not connected")
+            if (!isLoggedIn) throw IllegalStateException("Not connected")
             val host = preferences.iobrokerHost.first()
             
             val authHeader = getBasicAuthHeader()
@@ -369,7 +330,7 @@ class IobrokerRestClient @Inject constructor(
                 throw Exception("No valid auth credentials")
             }
             
-            val response = client.get {
+            val response =             httpClient.get {
                 restUrl(
                     host, authHeader, "set", objectId,
                     params = listOf("value" to encodeValue(value), "ack" to ack.toString())
@@ -393,7 +354,7 @@ class IobrokerRestClient @Inject constructor(
         return try {
             rateLimiter.acquire()
             
-            val client = httpClient ?: throw IllegalStateException("Not connected")
+            if (!isLoggedIn) throw IllegalStateException("Not connected")
             val host = preferences.iobrokerHost.first()
             
             val authHeader = getBasicAuthHeader()
@@ -402,7 +363,7 @@ class IobrokerRestClient @Inject constructor(
                 return null
             }
             
-            val response: JsonObject = client.get {
+            val response: JsonObject =             httpClient.get {
                 restUrl(host, authHeader, "json", "get", objectId)
             }.body()
             
@@ -421,9 +382,8 @@ class IobrokerRestClient @Inject constructor(
         return try {
             rateLimiter.acquire()
             
-            val client = httpClient
-            if (client == null) {
-                Log.w(TAG, "httpClient is null, cannot make REST API call")
+            if (!isLoggedIn) {
+                Log.w(TAG, "Not connected, cannot make REST API call")
                 return null
             }
             val host = preferences.iobrokerHost.first()
@@ -434,7 +394,7 @@ class IobrokerRestClient @Inject constructor(
                 return null
             }
             
-            val response: JsonObject = client.get {
+            val response: JsonObject =             httpClient.get {
                 restUrl(host, authHeader, "objects", params = listOf("pattern" to pattern))
             }.body()
             
@@ -453,9 +413,8 @@ class IobrokerRestClient @Inject constructor(
         return try {
             rateLimiter.acquire()
             
-            val client = httpClient
-            if (client == null) {
-                Log.w(TAG, "httpClient is null, cannot make REST API call")
+            if (!isLoggedIn) {
+                Log.w(TAG, "Not connected, cannot make REST API call")
                 return null
             }
             val host = preferences.iobrokerHost.first()
@@ -466,7 +425,7 @@ class IobrokerRestClient @Inject constructor(
                 return null
             }
             
-            val response: JsonObject = client.get {
+            val response: JsonObject =             httpClient.get {
                 restUrl(host, authHeader, "states", params = listOf("pattern" to pattern))
             }.body()
             
@@ -485,10 +444,8 @@ class IobrokerRestClient @Inject constructor(
         keepAliveJob?.cancel()
         reconnectJob = null
         keepAliveJob = null
-        
-        // Закрываем клиент
-        httpClient?.close()
-        httpClient = null
+
+        // Общий HttpClient не закрываем: он живёт всё время работы приложения
         currentSession = null
         isLoggedIn = false
         _connectionState.value = ConnectionState.Disconnected

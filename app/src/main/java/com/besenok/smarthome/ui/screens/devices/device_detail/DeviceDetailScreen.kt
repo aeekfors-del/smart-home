@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.besenok.smarthome.domain.model.ControlType
@@ -176,7 +177,7 @@ private fun ChannelCompactCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp),
+                .padding(6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -188,42 +189,34 @@ private fun ChannelCompactCard(
                 ) {
                     Text(
                         text = channel.name,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     IconButton(
                         onClick = onRename,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Переименовать параметр",
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(2.dp))
                 
                 val unit = channel.state?.unit ?: ""
                 val displayText = formatValueCompact(displayValue, unit)
                 val isBoolean = isBooleanValue(displayValue)
                 
                 Text(
-                    text = "Значение: $displayText",
-                    style = if (isBoolean) MaterialTheme.typography.bodySmall 
-                            else MaterialTheme.typography.headlineSmall,
+                    text = displayText,
+                    style = if (isBoolean) MaterialTheme.typography.labelSmall
+                            else MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                
-                if (channel.state?.ack == false && temporaryValue == null) {
-                    Text(
-                        text = "Не подтверждено",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
             }
 
             // Правая часть - элемент управления
@@ -251,29 +244,28 @@ private fun ChannelCompactCard(
                     }
                     var selectedColor by remember { mutableStateOf(currentColor) }
                     
-                    Column(horizontalAlignment = Alignment.End) {
-                        // Кнопка выбора цвета
+                    Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(60.dp)) {
+                        // Кнопка выбора цвета (компактная)
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
-                                .background(selectedColor, RoundedCornerShape(4.dp))
+                                .size(28.dp)
+                                .border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp))
+                                .background(selectedColor, RoundedCornerShape(3.dp))
                                 .clickable {
-                                    // Отправляем текущий выбранный цвет
                                     val hexColor = colorToHex(selectedColor)
                                     onToggle(hexColor)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
                             if (selectedColor == Color.Transparent) {
-                                Text("+", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("+", fontSize = MaterialTheme.typography.bodySmall.fontSize, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         
-                        // Палитра предустановленных цветов
+                        // Палитра предустановленных цветов (компактная)
                         Row(
-                            modifier = Modifier.height(30.dp),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            modifier = Modifier.height(18.dp),
+                            horizontalArrangement = Arrangement.spacedBy(1.dp)
                         ) {
                             val presetColors = listOf(
                                 Color.Red,
@@ -288,7 +280,7 @@ private fun ChannelCompactCard(
                             presetColors.forEach { color ->
                                 Box(
                                     modifier = Modifier
-                                        .size(20.dp)
+                                        .size(14.dp)
                                         .background(color, CircleShape)
                                         .clickable {
                                             selectedColor = color
@@ -313,20 +305,18 @@ private fun ChannelCompactCard(
                     
                     var tempValue by remember { mutableFloatStateOf(sliderPercent) }
                     
-                    Column(horizontalAlignment = Alignment.End) {
+                    Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(80.dp)) {
                         Slider(
                             value = tempValue,
                             onValueChange = { newValue ->
                                 tempValue = newValue
-                                // Отправляем процент (0-100)
                                 onToggle(tempValue.toInt())
                             },
                             onValueChangeFinished = {
-                                // Гарантируем отправку при завершении
                                 onToggle(tempValue.toInt())
                             },
                             valueRange = 0f..100f,
-                            modifier = Modifier.width(100.dp)
+                            modifier = Modifier.width(70.dp)
                         )
                         Text(
                             text = "${tempValue.toInt()}%",

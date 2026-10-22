@@ -1,6 +1,7 @@
 package com.besenok.smarthome.util
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Общие утилиты для работы с JSON
@@ -8,10 +9,12 @@ import kotlinx.serialization.json.JsonObject
 object JsonUtils {
 
     /**
-     * Извлекает строковое значение из JsonObject по ключу
+     * Извлекает строковое значение из JsonObject по ключу.
+     * Без промежуточных String/trim и без исключений.
      */
     fun getString(obj: JsonObject?, key: String): String? {
-        return obj?.get(key)?.toString()?.trim('"')
+        val element = obj?.get(key) as? JsonPrimitive ?: return null
+        return element.content
     }
 
     /**
@@ -22,15 +25,7 @@ object JsonUtils {
         return when (str) {
             "true" -> true
             "false" -> false
-            else -> try {
-                str.toInt()
-            } catch (e: NumberFormatException) {
-                try {
-                    str.toDouble()
-                } catch (e: NumberFormatException) {
-                    str
-                }
-            }
+            else -> str.toIntOrNull() ?: str.toDoubleOrNull() ?: str
         }
     }
 }

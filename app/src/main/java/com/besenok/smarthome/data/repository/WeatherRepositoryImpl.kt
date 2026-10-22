@@ -6,7 +6,6 @@ import com.besenok.smarthome.data.remote.weather.model.OpenWeatherForecastRespon
 import com.besenok.smarthome.domain.model.WeatherInfo
 import com.besenok.smarthome.domain.repository.WeatherRepository
 import com.besenok.smarthome.ui.common.UiState
-import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -72,8 +71,6 @@ class WeatherRepositoryImpl @Inject constructor(
      * Группирует прогноз по дням и выбирает запись для полудня (12:00)
      */
     private fun groupForecastByDay(forecastList: List<OpenWeatherForecastResponse.ForecastItem>): List<WeatherInfo.ForecastEntry> {
-        // Формат даты для группировки: yyyy-MM-dd
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val dayMap = mutableMapOf<String, OpenWeatherForecastResponse.ForecastItem>()
         
         for (item in forecastList) {

@@ -40,7 +40,6 @@ fun DeviceListScreen(
     val showAddDevice by viewModel.showAddDeviceDialog.collectAsState()
     val adaptersState by viewModel.adaptersState.collectAsState()
     val devicesFromAdapter by viewModel.devicesFromAdapter.collectAsState()
-    val addedDeviceIds by viewModel.addedDeviceIds.collectAsState()
     val selectedAdapterId by viewModel.selectedAdapterId.collectAsState()
 
     val filters = listOf(

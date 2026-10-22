@@ -56,9 +56,6 @@ class DeviceListViewModel @Inject constructor(
     
     private val _devicesFromAdapter = MutableStateFlow<UiState<List<Device>>>(UiState.Success(emptyList()))
     val devicesFromAdapter: StateFlow<UiState<List<Device>>> = _devicesFromAdapter.asStateFlow()
-    
-    private val _addedDeviceIds = MutableStateFlow<MutableSet<String>>(mutableSetOf())
-    val addedDeviceIds: StateFlow<MutableSet<String>> = _addedDeviceIds.asStateFlow()
 
     init {
         // Загружаем устройства из сохранённых адаптеров
@@ -152,7 +149,6 @@ class DeviceListViewModel @Inject constructor(
     fun showAddDeviceDialog() {
         _showAddDeviceDialog.value = true
         _devicesFromAdapter.value = UiState.Success(emptyList())
-        _addedDeviceIds.value = mutableSetOf()
         loadAdapters()
         Log.d(TAG, "Show add device dialog")
     }

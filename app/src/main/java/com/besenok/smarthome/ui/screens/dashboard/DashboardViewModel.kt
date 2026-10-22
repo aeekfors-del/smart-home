@@ -67,12 +67,16 @@ class DashboardViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     init {
+        // Погода и время не зависят от ioBroker — грузим сразу, не дожидаясь подключения
+        viewModelScope.launch {
+            loadWeather()
+            loadTime()
+            scheduleWeatherUpdates() // Периодическое обновление каждый час
+        }
+
         viewModelScope.launch {
             iobrokerRepository.connect()
             loadDevices()
-            loadWeather() // Загрузка при старте
-            loadTime()
-            scheduleWeatherUpdates() // Периодическое обновление каждый час
         }
 
         // Перезагружаем значения при изменении набора выбранных параметров

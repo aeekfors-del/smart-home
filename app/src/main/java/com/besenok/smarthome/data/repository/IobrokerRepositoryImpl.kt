@@ -15,6 +15,9 @@ import com.besenok.smarthome.domain.repository.IobrokerRepository
 import com.besenok.smarthome.ui.common.UiState
 import com.besenok.smarthome.util.JsonUtils
 import com.besenok.smarthome.util.TypeMapper
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonObject
 import javax.inject.Inject
@@ -78,43 +81,42 @@ class IobrokerRepositoryImpl @Inject constructor(
     }
 
     private suspend fun parseDevicesFromObjects(): List<Device> {
-        val allDevices = mutableListOf<Device>()
-        
         // РџРѕР»СѓС‡Р°РµРј СЃРїРёСЃРѕРє РґРѕР±Р°РІР»РµРЅРЅС‹С… Р°РґР°РїС‚РµСЂРѕРІ РёР· DataStore
         val addedAdapters = settingsDataSource.getAddedAdapterIds()
         Log.d(TAG, "Loaded ${addedAdapters.size} added adapters from DataStore: $addedAdapters")
         
         // РџРѕР»СѓС‡Р°РµРј СЃРїРёСЃРѕРє РґРѕР±Р°РІР»РµРЅРЅС‹С… deviceIds
-        val addedDeviceIds = settingsDataSource.getAddedDeviceIds()
+        val addedDeviceIds = settingsDataSource.getAddedDeviceIds().toSet()
         Log.d(TAG, "Loaded ${addedDeviceIds.size} added deviceIds from DataStore: $addedDeviceIds")
         
         if (addedAdapters.isEmpty() && addedDeviceIds.isEmpty()) {
             Log.d(TAG, "No adapters or devices added yet, returning empty device list")
             return emptyList()
         }
-        
-        // Р”Р»СЏ РєР°Р¶РґРѕРіРѕ РґРѕР±Р°РІР»РµРЅРЅРѕРіРѕ Р°РґР°РїС‚РµСЂР° Р·Р°РіСЂСѓР¶Р°РµРј СѓСЃС‚СЂРѕР№СЃС‚РІР°
-        for (adapterId in addedAdapters) {
-            try {
-                val adapterDevices = apiClient.getAdapterDevices(adapterId)
-                Log.d(TAG, "Loaded ${adapterDevices.size} devices from adapter: $adapterId")
-                
-                // Р¤РёР»СЊС‚СЂСѓРµРј СѓСЃС‚СЂРѕР№СЃС‚РІР° - РѕСЃС‚Р°РІР»СЏРµРј С‚РѕР»СЊРєРѕ С‚Рµ, С‡С‚Рѕ РґРѕР±Р°РІР»РµРЅС‹ РїРѕР»СЊР·РѕРІР°С‚РµР»РµРј
-                val filteredDevices = if (addedDeviceIds.isNotEmpty()) {
-                    val filtered = adapterDevices.filter { it.id in addedDeviceIds }
-                    Log.d(TAG, "Filtered ${filtered.size} devices (from ${adapterDevices.size}) based on addedDeviceIds")
-                    filtered
-                } else {
-                    // Р•СЃР»Рё РЅРµС‚ deviceIds, РїРѕРєР°Р·С‹РІР°РµРј РІСЃРµ СѓСЃС‚СЂРѕР№СЃС‚РІР° Р°РґР°РїС‚РµСЂР°
-                    adapterDevices
+
+        // Адаптеры загружаем параллельно: запросы независимы друг от друга
+        val devicesByAdapter = coroutineScope {
+            addedAdapters.map { adapterId ->
+                async {
+                    try {
+                        val adapterDevices = apiClient.getAdapterDevices(adapterId)
+                        Log.d(TAG, "Loaded ${adapterDevices.size} devices from adapter: $adapterId")
+                        if (addedDeviceIds.isNotEmpty()) {
+                            val filtered = adapterDevices.filter { it.id in addedDeviceIds }
+                            Log.d(TAG, "Filtered ${filtered.size} devices (from ${adapterDevices.size}) based on addedDeviceIds")
+                            filtered
+                        } else {
+                            adapterDevices
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error loading devices from adapter $adapterId", e)
+                        emptyList()
+                    }
                 }
-                
-                allDevices.addAll(filteredDevices)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading devices from adapter $adapterId", e)
-            }
+            }.awaitAll()
         }
-        
+
+        val allDevices = devicesByAdapter.flatten()
         Log.d(TAG, "Total parsed devices from all adapters: ${allDevices.size}")
         return allDevices
     }

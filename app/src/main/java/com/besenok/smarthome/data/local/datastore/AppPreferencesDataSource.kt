@@ -366,13 +366,17 @@ class AppPreferencesDataSource(private val context: Context) {
     }
 
     /**
-     * Добавляет device в список добавленных
+     * Добавляет device в список добавленных (атомарно, без гонок read-modify-write)
      * @param deviceId ID устройства
      */
     suspend fun addDeviceToList(deviceId: String) {
-        val currentList = getAddedDeviceIds()
-        if (!currentList.contains(deviceId)) {
-            saveAddedDeviceIds(currentList + deviceId)
+        context.dataStore.edit { preferences ->
+            val current = preferences[DEVICE_IDS_LIST]
+                ?.split(", ")?.filter { it.isNotBlank() }
+                ?: emptyList()
+            if (deviceId !in current) {
+                preferences[DEVICE_IDS_LIST] = (current + deviceId).joinToString(", ")
+            }
         }
     }
 
@@ -381,9 +385,17 @@ class AppPreferencesDataSource(private val context: Context) {
      * @param deviceId ID устройства
      */
     suspend fun removeDeviceFromList(deviceId: String) {
-        val currentList = getAddedDeviceIds()
-        val newList = currentList.filter { it != deviceId }
-        saveAddedDeviceIds(newList)
+        context.dataStore.edit { preferences ->
+            val current = preferences[DEVICE_IDS_LIST]
+                ?.split(", ")?.filter { it.isNotBlank() }
+                ?: emptyList()
+            val newList = current.filter { it != deviceId }
+            if (newList.isEmpty()) {
+                preferences.remove(DEVICE_IDS_LIST)
+            } else {
+                preferences[DEVICE_IDS_LIST] = newList.joinToString(", ")
+            }
+        }
     }
 
     /**
@@ -415,13 +427,17 @@ class AppPreferencesDataSource(private val context: Context) {
     }
 
     /**
-     * Добавляет адаптер в список добавленных
+     * Добавляет адаптер в список добавленных (атомарно)
      * @param adapterId ID адаптера
      */
     suspend fun addAdapterToList(adapterId: String) {
-        val currentList = getAddedAdapterIds()
-        if (!currentList.contains(adapterId)) {
-            saveAddedAdapters(currentList + adapterId)
+        context.dataStore.edit { preferences ->
+            val current = preferences[ADAPTERS_LIST]
+                ?.split(", ")?.filter { it.isNotBlank() }
+                ?: emptyList()
+            if (adapterId !in current) {
+                preferences[ADAPTERS_LIST] = (current + adapterId).joinToString(", ")
+            }
         }
     }
 
@@ -430,8 +446,16 @@ class AppPreferencesDataSource(private val context: Context) {
      * @param adapterId ID адаптера
      */
     suspend fun removeAdapterFromList(adapterId: String) {
-        val currentList = getAddedAdapterIds()
-        val newList = currentList.filter { it != adapterId }
-        saveAddedAdapters(newList)
+        context.dataStore.edit { preferences ->
+            val current = preferences[ADAPTERS_LIST]
+                ?.split(", ")?.filter { it.isNotBlank() }
+                ?: emptyList()
+            val newList = current.filter { it != adapterId }
+            if (newList.isEmpty()) {
+                preferences.remove(ADAPTERS_LIST)
+            } else {
+                preferences[ADAPTERS_LIST] = newList.joinToString(", ")
+            }
+        }
     }
 }

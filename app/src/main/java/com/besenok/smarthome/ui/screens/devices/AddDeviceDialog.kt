@@ -58,15 +58,12 @@ fun AddDeviceDialog(
     // Собираем устройства в список для отображения
     val devicesList = when (val state = devicesState) {
         is UiState.Success -> {
-            Log.d(TAG, "DevicesState is Success, data size: ${state.data?.size}")
             state.data
         }
         is UiState.Loading -> {
-            Log.d(TAG, "DevicesState is Loading")
             null
         }
         is UiState.Error -> {
-            Log.d(TAG, "DevicesState is Error: ${state.message}")
             null
         }
     } ?: emptyList()
@@ -172,7 +169,6 @@ fun AdapterList(
         }
         is UiState.Success -> {
             val adapters = state.data
-            Log.d(TAG, "Found ${adapters.size} adapters, selectedAdapterId=$selectedAdapterId")
             
             if (adapters.isEmpty()) {
                 Text("Адаптеры не найдены")
@@ -182,7 +178,6 @@ fun AdapterList(
                 ) {
                     items(adapters, key = { it.id }) { adapter ->
                         val isSelected = adapter.id == selectedAdapterId
-                        Log.d(TAG, "Adapter ${adapter.id} (${adapter.name}): isSelected=$isSelected")
                         
                         AdapterItem(
                             adapterId = adapter.id,
@@ -309,8 +304,6 @@ fun DeviceSelectionList(
                 Text("Назад")
             }
         }
-        
-        Log.d(TAG, "DeviceSelectionList rendering with ${devices.size} devices")
         
         if (devices.isEmpty()) {
             Box(
