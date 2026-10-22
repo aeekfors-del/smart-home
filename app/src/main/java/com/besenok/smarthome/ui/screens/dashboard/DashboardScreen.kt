@@ -38,6 +38,13 @@ fun DashboardScreen(
     var pickerSlot by remember { mutableStateOf<Int?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember { AppPreferencesDataSource(context) }
+    val customDeviceNames = remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    
+    // Загружаем пользовательские имена устройств
+    LaunchedEffect(Unit) {
+        customDeviceNames.value = preferences.getAllDeviceNames()
+    }
+    
     val weatherRegion by preferences.weatherRegion.collectAsState(
         initial = AppPreferencesDataSource.DEFAULT_WEATHER_REGION
     )
@@ -58,6 +65,7 @@ fun DashboardScreen(
     pickerSlot?.let { slotIndex ->
         ParameterPickerDialog(
             devicesState = devices,
+            customDeviceNames = customDeviceNames.value,
             onDismiss = { pickerSlot = null },
             onPick = { objectId ->
                 viewModel.selectParameter(slotIndex, objectId)
@@ -263,6 +271,7 @@ fun DashboardParameterCell(
 @Composable
 fun ParameterPickerDialog(
     devicesState: UiState<List<Device>>,
+    customDeviceNames: Map<String, String>,
     onDismiss: () -> Unit,
     onPick: (String) -> Unit
 ) {
@@ -272,7 +281,7 @@ fun ParameterPickerDialog(
         onDismissRequest = {
             if (selectedDevice != null) selectedDevice = null else onDismiss()
         },
-        title = { Text(selectedDevice?.name ?: "Выбор параметра") },
+        title = { Text(selectedDevice?.let { customDeviceNames[it.id] ?: it.name } ?: "Выбор параметра") },
         text = {
             when (devicesState) {
                 is UiState.Loading -> Box(
@@ -294,20 +303,31 @@ fun ParameterPickerDialog(
                         if (devices.isEmpty()) {
                             Text("Нет подключённых устройств")
                         } else {
+                            // Группируем устройства по connectionGroup (адаптер)
+                            val groupedDevices = devices.groupBy { it.connectionGroup ?: "Другое" }
                             LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                                items(devices, key = { it.id }) { item ->
-                                    ListItem(
-                                        headlineContent = {
-                                            Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        },
-                                        supportingContent = {
-                                            Text("${item.channels.size} параметров")
-                                        },
-                                        leadingContent = {
-                                            Text(deviceTypeIcon(item.type), style = MaterialTheme.typography.titleLarge)
-                                        },
-                                        modifier = Modifier.clickable { selectedDevice = item }
-                                    )
+                                groupedDevices.toSortedMap().forEach { (groupName, groupDevices) ->
+                                    item {
+                                        DeviceGroupHeader(
+                                            groupName = groupName,
+                                            deviceCount = groupDevices.size
+                                        )
+                                    }
+                                    items(groupDevices, key = { it.id }) { item ->
+                                        val displayName = customDeviceNames[item.id] ?: item.name
+                                        ListItem(
+                                            headlineContent = {
+                                                Text(displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            },
+                                            supportingContent = {
+                                                Text("${item.channels.size} параметров")
+                                            },
+                                            leadingContent = {
+                                                Text(deviceTypeIcon(item.type), style = MaterialTheme.typography.titleLarge)
+                                            },
+                                            modifier = Modifier.clickable { selectedDevice = item }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -349,6 +369,29 @@ fun ParameterPickerDialog(
             TextButton(onClick = onDismiss) { Text("Отмена") }
         }
     )
+}
+
+@Composable
+private fun DeviceGroupHeader(groupName: String, deviceCount: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = groupName,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = "$deviceCount устройств",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 private data class ParameterLabel(
