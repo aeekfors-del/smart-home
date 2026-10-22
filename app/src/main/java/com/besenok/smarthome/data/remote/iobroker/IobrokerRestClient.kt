@@ -63,10 +63,15 @@ class IobrokerRestClient @Inject constructor(
     private val _connectionState: MutableStateFlow<ConnectionState> = MutableStateFlow(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState
 
-    private var reconnectJob: Job? = null
-    private var currentSession: String? = null
+    @Volatile
     private var httpClient: HttpClient? = null
+
+    @Volatile
     private var isLoggedIn = false
+
+    private var reconnectJob: Job? = null
+    private var keepAliveJob: Job? = null
+    private var currentSession: String? = null
 
     /**
      * Создает Basic Auth заголовок из сохраненных учетных данных
@@ -133,7 +138,14 @@ class IobrokerRestClient @Inject constructor(
     }
 
     suspend fun connect() {
+        // Не создаём новый клиент если уже подключены
         if (_connectionState.value is ConnectionState.Connected) return
+        // Не пересоздаём клиент во время подключения
+        if (_connectionState.value is ConnectionState.Connecting) return
+
+        // Отменяем предыдущие попытки реконнекта
+        reconnectJob?.cancel()
+        keepAliveJob?.cancel()
 
         _connectionState.value = ConnectionState.Connecting
 
@@ -172,40 +184,44 @@ class IobrokerRestClient @Inject constructor(
                 }
             }
 
-            // Закрываем предыдущий клиент, чтобы не копились пулы соединений
+            // Атомарно обновляем httpClient и isLoggedIn
             httpClient?.close()
             httpClient = client
+            isLoggedIn = true
             currentSession = "session-${System.currentTimeMillis()}"
 
             // Аутентификация через Basic Auth
             val authHeader = getBasicAuthHeader()
             if (authHeader != null) {
                 val response = client.get {
-                    restUrl(host, authHeader, "json", "get", "system.adapter.admin.0.alive")
+                    restUrl(host, authHeader, "json", "get", params = listOf("get" to "system.adapter.admin.0.alive"))
                 }
                 
                 if (response.status.value in 200..299) {
-                    isLoggedIn = true
                     _connectionState.value = ConnectionState.Connected("Connected to $host:$REST_PORT")
                     startKeepAlive()
                 } else {
+                    isLoggedIn = false
                     _connectionState.value = ConnectionState.Error("Аутентификация не удалась")
                     startReconnection()
                 }
             } else {
+                isLoggedIn = false
                 _connectionState.value = ConnectionState.Error("Укажите учетные данные в настройках")
                 startReconnection()
             }
         } catch (e: Exception) {
+            isLoggedIn = false
             _connectionState.value = ConnectionState.Error("Ошибка подключения: ${e.message}")
             startReconnection()
         }
     }
 
     private fun startKeepAlive() {
-        if (reconnectJob?.isActive == true) return
+        // Не создаём несколько keep-alive циклов
+        if (keepAliveJob?.isActive == true) return
         
-        CoroutineScope(Dispatchers.IO).launch {
+        keepAliveJob = CoroutineScope(Dispatchers.IO).launch {
             while (isActive && _connectionState.value is ConnectionState.Connected) {
                 delay(30000)
                 
@@ -220,20 +236,23 @@ class IobrokerRestClient @Inject constructor(
                                 restUrl(host, authHeader, "json", "get", params = listOf("get" to "system.adapter.admin.0.alive"))
                             }
                         } catch (e: Exception) {
-                            _connectionState.value = ConnectionState.Error("Потеряно соединение")
-                            startReconnection()
+                            Log.w(TAG, "Keep-alive check failed, will try reconnect")
+                            // Не меняем состояние напрямую, даём reconnectJob обработать
                             break
                         }
                     } else {
-                        _connectionState.value = ConnectionState.Error("Ошибка аутентификации")
-                        startReconnection()
+                        Log.w(TAG, "Auth header lost during keep-alive")
                         break
                     }
                 } catch (e: Exception) {
-                    _connectionState.value = ConnectionState.Error("Ошибка keep-alive: ${e.message}")
-                    startReconnection()
+                    Log.w(TAG, "Keep-alive exception: ${e.message}")
                     break
                 }
+            }
+            
+            // Keep-alive завершён — запускаем реконнект если нужно
+            if (_connectionState.value !is ConnectionState.Connected) {
+                startReconnection()
             }
         }
     }
@@ -461,7 +480,13 @@ class IobrokerRestClient @Inject constructor(
     }
 
     suspend fun disconnect() {
+        // Отменяем все корутины
         reconnectJob?.cancel()
+        keepAliveJob?.cancel()
+        reconnectJob = null
+        keepAliveJob = null
+        
+        // Закрываем клиент
         httpClient?.close()
         httpClient = null
         currentSession = null
@@ -470,15 +495,34 @@ class IobrokerRestClient @Inject constructor(
     }
 
     private fun startReconnection() {
+        // Не создаём несколько циклов реконнекта
         if (reconnectJob?.isActive == true) return
+        // Отменяем keep-alive при реконнекте
+        keepAliveJob?.cancel()
 
         reconnectJob = CoroutineScope(Dispatchers.IO).launch {
             var delayMs = 1000L
             val maxDelayMs = 30000L
 
-            while (isActive && _connectionState.value !is ConnectionState.Connected) {
+            while (isActive) {
+                // Проверяем состояние перед каждой попыткой
+                when (_connectionState.value) {
+                    is ConnectionState.Connected -> break
+                    is ConnectionState.Error -> {
+                        // Если ошибка подключения (не аутентификация), пробуем reconnect
+                        val errorMsg = (_connectionState.value as ConnectionState.Error).message ?: ""
+                        if (errorMsg.contains("адрес") || errorMsg.contains("учетные данные")) {
+                            // Фатальные ошибки — не переподключаемся
+                            break
+                        }
+                    }
+                    else -> {}
+                }
+
                 delay(delayMs)
                 delayMs = minOf(delayMs * 2, maxDelayMs)
+                
+                // connect() сам проверит состояние и не создаст дубликаты
                 connect()
             }
         }
