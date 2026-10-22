@@ -14,13 +14,15 @@ private const val TAG = "AdapterService"
  * Ответственность: получение списка адаптеров и их статусов
  */
 @Singleton
-class AdapterService @Inject constructor() {
+class AdapterService @Inject constructor(
+    private val restClient: IobrokerRestClient
+) {
 
     /**
      * Получение списка адаптеров с проверкой статуса alive
      * Извлекает adapterId из ID объектов и проверяет system.adapter.XXX.0.alive
      */
-    suspend fun getAdapterList(restClient: IobrokerRestClient): List<AdapterInfo> {
+    suspend fun getAdapterList(): List<AdapterInfo> {
         Log.d(TAG, "========== GET ADAPTER LIST ==========")
 
         // Получаем все объекты system.adapter.* чтобы извлечь уникальные adapterId

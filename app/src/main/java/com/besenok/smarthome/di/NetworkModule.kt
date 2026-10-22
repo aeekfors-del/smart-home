@@ -86,11 +86,11 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideAdapterService(): AdapterService = AdapterService()
+    fun provideAdapterService(restClient: IobrokerRestClient): AdapterService = AdapterService(restClient)
 
     @Provides
     @Singleton
-    fun provideDeviceParser(): DeviceParser = DeviceParser()
+    fun provideDeviceParser(restClient: IobrokerRestClient): DeviceParser = DeviceParser(restClient)
 
     @Provides
     @Singleton

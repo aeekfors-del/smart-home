@@ -17,7 +17,9 @@ private const val TAG = "DeviceParser"
  * Ответственность: извлечение device/channel/state из JSON
  */
 @Singleton
-class DeviceParser @Inject constructor() {
+class DeviceParser @Inject constructor(
+    private val restClient: IobrokerRestClient
+) {
 
     /**
      * Парсит устройства из адаптера
@@ -26,7 +28,6 @@ class DeviceParser @Inject constructor() {
         adapterId: String,
         states: JsonObject,
         objects: JsonObject?,
-        restClient: IobrokerRestClient,
         classifier: DeviceClassifier
     ): List<Device> {
         Log.d(TAG, "========== PARSE ADAPTER DEVICES ==========")

@@ -54,7 +54,7 @@ class IobrokerApiClient @Inject constructor(
     // ==================== Adapter Management (делегируем adapterService) ====================
 
     suspend fun getAdapterList(): List<com.besenok.smarthome.domain.model.AdapterInfo> {
-        return adapterService.getAdapterList(restClient)
+        return adapterService.getAdapterList()
     }
 
     // ==================== Device Parsing (делегируем deviceParser + classifier) ====================
@@ -75,7 +75,6 @@ class IobrokerApiClient @Inject constructor(
             adapterId = adapterId,
             states = allStates,
             objects = allObjects,
-            restClient = restClient,
             classifier = deviceClassifier
         )
     }
