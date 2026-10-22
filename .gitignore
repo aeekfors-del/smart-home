@@ -62,3 +62,7 @@ import-log.xml
 
 # IDE plugin settings
 .gigaide/
+
+# Release signing
+keystore.properties
+/release.keystore
