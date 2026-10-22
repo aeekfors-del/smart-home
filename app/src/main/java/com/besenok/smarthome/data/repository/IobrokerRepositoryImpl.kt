@@ -624,6 +624,25 @@ class IobrokerRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getState(objectId: String): UiState<Any?> {
+        return try {
+            val state = apiClient.getState(objectId)
+            Log.d(TAG, "getState($objectId): state=$state, value=${state?.value}")
+            if (state == null) {
+                Log.w(TAG, "getState($objectId): state object is null")
+                UiState.Error("Не удалось получить значение параметра")
+            } else {
+                UiState.Success(state.value)
+            }
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "Not connected while getting state $objectId", e)
+            UiState.Error("Нет соединения с ioBroker")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting state $objectId", e)
+            UiState.Error(e.message ?: "Ошибка получения значения параметра")
+        }
+    }
+
     override suspend fun setState(objectId: String, value: Any, ack: Boolean): UiState<Unit> {
         return try {
             Log.d(TAG, "Setting state $objectId = $value (ack=$ack)")

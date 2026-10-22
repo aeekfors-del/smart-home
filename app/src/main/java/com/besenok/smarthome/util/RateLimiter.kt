@@ -3,7 +3,6 @@ package com.besenok.smarthome.util
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * Rate limiter с поддержкой sliding window
@@ -13,47 +12,48 @@ class RateLimiter(
     private val maxRequests: Int = 10,
     private val windowSeconds: Long = 1
 ) {
-    private val timestamps = mutableListOf<Long>()
+    private val timestamps = ArrayDeque<Long>()
     private val mutex = Mutex()
 
     /**
      * Ждёт пока станет доступен slot для запроса
      */
     suspend fun acquire() {
-        mutex.withLock {
-            val now = System.nanoTime()
-            val windowNanos = windowSeconds * 1_000_000_000L
-            val minTimestamp = now - windowNanos
+        while (true) {
+            val waitNanos = mutex.withLock {
+                val now = System.nanoTime()
+                val windowNanos = windowSeconds * 1_000_000_000L
+                val minTimestamp = now - windowNanos
 
-            // Удаляем старые timestamps
-            timestamps.removeAll { it < minTimestamp }
+                // Удаляем старые timestamps (список упорядочен по времени)
+                while (timestamps.isNotEmpty() && timestamps.first() < minTimestamp) {
+                    timestamps.removeFirst()
+                }
 
-            // Если лимит исчерпан — ждём
-            if (timestamps.size >= maxRequests) {
-                val oldest = timestamps.minOrNull() ?: 0
-                val waitTime = (oldest + windowNanos) - now
-                if (waitTime > 0) {
-                    mutex.unlock()
-                    delay(waitTime / 1_000_000) // convert to ms
-                    mutex.withLock { }
+                if (timestamps.size >= maxRequests) {
+                    // Ждём освобождения самого старого слота; мьютекс при этом отпущен
+                    (timestamps.first() + windowNanos) - now
+                } else {
+                    timestamps.addLast(now)
+                    0L
                 }
             }
-
-            timestamps.add(System.nanoTime())
+            if (waitNanos <= 0L) return
+            delay(waitNanos / 1_000_000L + 1)
         }
     }
 
     /**
      * Проверяет можно ли сделать запрос без ожидания
      */
-    suspend fun canExecute(): Boolean {
-        mutex.withLock {
-            val now = System.nanoTime()
-            val windowNanos = windowSeconds * 1_000_000_000L
-            val minTimestamp = now - windowNanos
+    suspend fun canExecute(): Boolean = mutex.withLock {
+        val now = System.nanoTime()
+        val windowNanos = windowSeconds * 1_000_000_000L
+        val minTimestamp = now - windowNanos
 
-            timestamps.removeAll { it < minTimestamp }
-            return timestamps.size < maxRequests
+        while (timestamps.isNotEmpty() && timestamps.first() < minTimestamp) {
+            timestamps.removeFirst()
         }
+        timestamps.size < maxRequests
     }
 }

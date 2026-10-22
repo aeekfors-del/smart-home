@@ -181,7 +181,7 @@ class IobrokerRestClient @Inject constructor(
             val authHeader = getBasicAuthHeader()
             if (authHeader != null) {
                 val response = client.get {
-                    restUrl(host, authHeader, "json", "getPlainValue", "system.adapter.admin.0.alive")
+                    restUrl(host, authHeader, "json", "get", "system.adapter.admin.0.alive")
                 }
                 
                 if (response.status.value in 200..299) {
@@ -217,7 +217,7 @@ class IobrokerRestClient @Inject constructor(
                     if (authHeader != null) {
                         try {
                             client.get {
-                                restUrl(host, authHeader, "json", "getPlainValue", "system.adapter.admin.0.alive")
+                                restUrl(host, authHeader, "json", "get", params = listOf("get" to "system.adapter.admin.0.alive"))
                             }
                         } catch (e: Exception) {
                             _connectionState.value = ConnectionState.Error("Потеряно соединение")
@@ -251,11 +251,39 @@ class IobrokerRestClient @Inject constructor(
                 return null
             }
             
-            val plainValue: String = client.get {
-                restUrl(host, authHeader, "json", "getPlainValue", objectId)
-            }.body()
+            val response = client.get {
+                restUrl(host, authHeader, "json", "get", params = listOf("get" to objectId))
+            }
+
+            if (response.status.value !in 200..299) {
+                val errorBody = response.body<String>()
+                Log.e(TAG, "getState($objectId) failed: status=${response.status}, body=$errorBody")
+                return null
+            }
+
+            // ioBroker /json/get возвращает JSON: {"val":value,"ack":true,...}
+            val jsonBody = response.body<JsonObject>()
             
-            val value = parsePlainValue(plainValue)
+            // Проверяем наличие поля "val"
+            if (!jsonBody.contains("val")) {
+                Log.w(TAG, "getState($objectId): 'val' field not found in response. Keys: ${jsonBody.keys}")
+                return null
+            }
+            
+            val rawValue = jsonBody["val"]?.let {
+                when (it) {
+                    is JsonPrimitive -> it.contentOrNull
+                    else -> it.toString()
+                }
+            }
+            
+            Log.d(TAG, "getState($objectId) = rawValue=$rawValue, type=${jsonBody["val"]?.javaClass?.simpleName}")
+            
+            val value = if (rawValue == null || rawValue == "null" || rawValue == "") {
+                null
+            } else {
+                parsePlainValue(rawValue)
+            }
             IobrokerState(value = value, ack = true, ts = System.currentTimeMillis().toInt())
         } catch (e: Exception) {
             Log.e(TAG, "Error getting state for $objectId", e)

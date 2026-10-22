@@ -21,6 +21,13 @@ interface IobrokerRepository {
 
     suspend fun getDevices(): UiState<List<Device>>
     suspend fun getDevice(deviceId: String): UiState<Device>
+
+    /**
+     * Значение одного состояния ioBroker (параметра устройства)
+     * @param objectId полный ID состояния, например "mihome.0.devices.sensor_ht_1234.temperature"
+     */
+    suspend fun getState(objectId: String): UiState<Any?>
+
     suspend fun setState(objectId: String, value: Any, ack: Boolean = true): UiState<Unit>
 
     suspend fun getAdapters(): UiState<List<AdapterInfo>>

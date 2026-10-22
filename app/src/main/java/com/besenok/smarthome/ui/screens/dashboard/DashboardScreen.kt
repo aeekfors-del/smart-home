@@ -1,7 +1,10 @@
 package com.besenok.smarthome.ui.screens.dashboard
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -13,9 +16,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.besenok.smarthome.data.local.datastore.AppPreferencesDataSource
+import com.besenok.smarthome.domain.model.Device
 import com.besenok.smarthome.domain.model.WeatherInfo
 import com.besenok.smarthome.ui.common.UiState
 
@@ -27,6 +32,10 @@ fun DashboardScreen(
     val connectionState by viewModel.connectionState.collectAsState()
     val weather by viewModel.weatherState.collectAsState()
     val forecast by viewModel.forecastState.collectAsState()
+    val devices by viewModel.devicesState.collectAsState()
+    val slots by viewModel.dashboardSlots.collectAsState()
+    val parameterValues by viewModel.parameterValues.collectAsState()
+    var pickerSlot by remember { mutableStateOf<Int?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember { AppPreferencesDataSource(context) }
     val weatherRegion by preferences.weatherRegion.collectAsState(
@@ -45,29 +54,28 @@ fun DashboardScreen(
         }
     }
 
+    // Диалог выбора параметра для ячейки
+    pickerSlot?.let { slotIndex ->
+        ParameterPickerDialog(
+            devicesState = devices,
+            onDismiss = { pickerSlot = null },
+            onPick = { objectId ->
+                viewModel.selectParameter(slotIndex, objectId)
+                pickerSlot = null
+            }
+        )
+    }
+
     Scaffold(
-        topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-            )
-        }
+        topBar = { }
     ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(16.dp),
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Grid 3x3
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
-            ) {
                 // ===== ROW 1 =====
                 item {
                     // Cell 1: Время
@@ -82,18 +90,20 @@ fun DashboardScreen(
                     ConnectionStatusCard(connectionState)
                 }
                 
-                // ===== ROW 2 =====
-                item {
-                    // Cell 4: Пусто
-                    DashboardPlaceholderCard()
-                }
-                item {
-                    // Cell 5: Пусто
-                    DashboardPlaceholderCard()
-                }
-                item {
-                    // Cell 6: Пусто
-                    DashboardPlaceholderCard()
+                // ===== ROW 2: параметры, выбранные пользователем =====
+                items(AppPreferencesDataSource.DASHBOARD_SLOT_COUNT) { slotIndex ->
+                    val objectId = slots.getOrNull(slotIndex)
+                    DashboardParameterCell(
+                        slotIndex = slotIndex,
+                        objectId = objectId,
+                        devices = devices,
+                        value = objectId?.let { parameterValues[it] },
+                        onPick = {
+                            viewModel.loadDevices()
+                            pickerSlot = slotIndex
+                        },
+                        onClear = { viewModel.selectParameter(slotIndex, null) }
+                    )
                 }
                 
                 // ===== ROW 3 =====
@@ -105,9 +115,286 @@ fun DashboardScreen(
                     // Cell 7-9: Прогноз на 5 дней (на всю ширину)
                     ForecastWidgetCard(forecast)
                 }
+            }  // end LVG lambda
+        }  // end Scaffold content
+}  // end DashboardScreen
+
+private val DashboardParameterCellHeight = 150.dp
+
+/**
+ * Ячейка row2: параметр устройства, выбранный пользователем
+ */
+@Composable
+fun DashboardParameterCell(
+    slotIndex: Int,
+    objectId: String?,
+    devices: UiState<List<Device>>,
+    value: UiState<Any?>?,
+    onPick: () -> Unit,
+    onClear: () -> Unit
+) {
+    if (objectId == null) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .clickable(onClick = onPick),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    "＋",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "Выбрать параметр",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        return
+    }
+
+    val label = remember(objectId, devices) { resolveParameterLabel(objectId, devices) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(120.dp)
+            .clickable(onClick = onPick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Лейбл: имя параметра
+            Text(
+                text = label.parameterName,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            
+            // Значение параметра
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                when (value) {
+                    null, is UiState.Loading -> Text(
+                        "—",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    is UiState.Error -> Text(
+                        value.message ?: "Ошибка",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                    is UiState.Success -> {
+                        val displayValue = value.data
+                        if (displayValue == null) {
+                            Text(
+                                "—",
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Text(
+                                formatValueWithUnit(displayValue, label.unit),
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // Кнопка закрытия (внизу, чтобы не перекрывать лейбл)
+            IconButton(
+                onClick = onClear,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .size(24.dp)
+            ) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Убрать параметр из ячейки ${slotIndex + 1}",
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }
+}
+
+/**
+ * Диалог выбора: устройство -> параметр (канал)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ParameterPickerDialog(
+    devicesState: UiState<List<Device>>,
+    onDismiss: () -> Unit,
+    onPick: (String) -> Unit
+) {
+    var selectedDevice by remember { mutableStateOf<Device?>(null) }
+
+    AlertDialog(
+        onDismissRequest = {
+            if (selectedDevice != null) selectedDevice = null else onDismiss()
+        },
+        title = { Text(selectedDevice?.name ?: "Выбор параметра") },
+        text = {
+            when (devicesState) {
+                is UiState.Loading -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+                is UiState.Error -> Text(
+                    devicesState.message,
+                    color = MaterialTheme.colorScheme.error
+                )
+                is UiState.Success -> {
+                    val device = selectedDevice
+                    val devices = devicesState.data
+                    if (device == null) {
+                        if (devices.isEmpty()) {
+                            Text("Нет подключённых устройств")
+                        } else {
+                            LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                                items(devices, key = { it.id }) { item ->
+                                    ListItem(
+                                        headlineContent = {
+                                            Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        },
+                                        supportingContent = {
+                                            Text("${item.channels.size} параметров")
+                                        },
+                                        leadingContent = {
+                                            Text(deviceTypeIcon(item.type), style = MaterialTheme.typography.titleLarge)
+                                        },
+                                        modifier = Modifier.clickable { selectedDevice = item }
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        val parameters = device.channels
+                        if (parameters.isEmpty()) {
+                            Text("У этого устройства нет параметров")
+                        } else {
+                            LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                                items(parameters, key = { it.id }) { channel ->
+                                    ListItem(
+                                        headlineContent = {
+                                            Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        },
+                                        supportingContent = {
+                                            Text(channel.id, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        },
+                                        trailingContent = {
+                                            Text(
+                                                formatValueWithUnit(channel.state?.value, channel.state?.unit),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        },
+                                        modifier = Modifier.clickable { onPick(channel.id) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (selectedDevice != null) {
+                TextButton(onClick = { selectedDevice = null }) { Text("Назад") }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена") }
+        }
+    )
+}
+
+private data class ParameterLabel(
+    val deviceName: String,
+    val parameterName: String,
+    val unit: String?
+)
+
+private fun resolveParameterLabel(objectId: String, devices: UiState<List<Device>>): ParameterLabel {
+    val list = (devices as? UiState.Success)?.data.orEmpty()
+    list.forEach { device ->
+        device.channels.firstOrNull { it.id == objectId }?.let { channel ->
+            return ParameterLabel(device.name, channel.name, channel.state?.unit)
+        }
+        if (device.id == objectId) {
+            return ParameterLabel(device.name, device.name, device.state?.unit ?: device.unit)
+        }
+    }
+    return ParameterLabel(
+        deviceName = objectId.substringBeforeLast(".", objectId),
+        parameterName = objectId.substringAfterLast("."),
+        unit = null
+    )
+}
+
+private fun deviceTypeIcon(type: Device.DeviceType): String = when (type) {
+    Device.DeviceType.LIGHT -> "💡"
+    Device.DeviceType.SOCKET -> "🔌"
+    Device.DeviceType.SENSOR -> "📡"
+    Device.DeviceType.THERMOSTAT -> "🌡️"
+    Device.DeviceType.BLIND -> "🪟"
+    Device.DeviceType.GATE -> "🚪"
+    Device.DeviceType.OTHER -> "⚙️"
+}
+
+private fun formatStateValue(value: Any?): String = when (value) {
+    null -> "—"
+    is Boolean -> if (value) "Вкл" else "Выкл"
+    is Double -> if (value % 1.0 == 0.0) value.toLong().toString() else String.format("%.1f", value)
+    is Float -> if (value % 1f == 0f) value.toLong().toString() else String.format("%.1f", value)
+    else -> value.toString()
+}
+
+private fun formatValueWithUnit(value: Any?, unit: String?): String {
+    val text = formatStateValue(value)
+    return if (unit.isNullOrBlank() || value is Boolean || text == "—") text else "$text $unit"
 }
 
 @Composable

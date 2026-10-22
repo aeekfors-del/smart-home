@@ -152,6 +152,17 @@ class IobrokerRepositoryMock @Inject constructor(
             ?: UiState.Error("Device not found")
     }
 
+    override suspend fun getState(objectId: String): UiState<Any?> {
+        delay(100)
+        val channelValue = mockDevices
+            .flatMap { it.channels }
+            .firstOrNull { it.id == objectId }
+            ?.state?.value
+        val deviceValue = mockDevices.firstOrNull { it.id == objectId }?.state?.value
+        val sensorValue = mockSensors.firstOrNull { it.id == objectId }?.value
+        return UiState.Success(channelValue ?: deviceValue ?: sensorValue)
+    }
+
     override suspend fun setState(objectId: String, value: Any, ack: Boolean): UiState<Unit> {
         // Mock — просто успешный ответ
         delay(200)

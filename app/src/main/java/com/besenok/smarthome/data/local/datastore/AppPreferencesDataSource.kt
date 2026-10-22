@@ -50,6 +50,12 @@ class AppPreferencesDataSource(private val context: Context) {
         val ADAPTERS_LIST = stringPreferencesKey("added_adapters")
         val DEVICE_IDS_LIST = stringPreferencesKey("added_device_ids")
 
+        // Dashboard: objectId выбранного параметра для каждой ячейки row2
+        const val DASHBOARD_SLOT_COUNT = 3
+        const val DASHBOARD_SLOT_PREFIX = "dashboard_slot_"
+
+        fun dashboardSlotKey(index: Int) = stringPreferencesKey("$DASHBOARD_SLOT_PREFIX$index")
+
         // Weather regions: name -> lat,lon
         val WEATHER_REGIONS = mapOf(
             "Москва" to "55.7558,37.6173",
@@ -242,6 +248,28 @@ class AppPreferencesDataSource(private val context: Context) {
      */
     suspend fun deleteDeviceName(deviceId: String) {
         saveDeviceName(deviceId, null)
+    }
+
+    // ========== Dashboard slots ==========
+
+    /** Выбранные параметры для ячеек row2 (null - ячейка не настроена) */
+    val dashboardSlots: Flow<List<String?>> = context.dataStore.data.map { preferences ->
+        (0 until DASHBOARD_SLOT_COUNT).map { index -> preferences[dashboardSlotKey(index)] }
+    }
+
+    /**
+     * Сохраняет параметр для ячейки dashboard
+     * @param objectId ID состояния ioBroker, null или пустая строка - очистить ячейку
+     */
+    suspend fun saveDashboardSlot(index: Int, objectId: String?) {
+        context.dataStore.edit { preferences ->
+            val key = dashboardSlotKey(index)
+            if (objectId.isNullOrBlank()) {
+                preferences.remove(key)
+            } else {
+                preferences[key] = objectId
+            }
+        }
     }
 
     // ========== Added Adapters Storage ==========
