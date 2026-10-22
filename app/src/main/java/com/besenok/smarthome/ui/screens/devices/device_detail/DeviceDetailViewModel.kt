@@ -7,6 +7,7 @@ import com.besenok.smarthome.domain.model.ControlType
 import com.besenok.smarthome.domain.model.Device
 import com.besenok.smarthome.domain.model.State
 import com.besenok.smarthome.domain.usecase.device.GetDevicesUseCase
+import com.besenok.smarthome.domain.usecase.device.RenameParameterUseCase
 import com.besenok.smarthome.domain.usecase.device.SetDeviceStateUseCase
 import com.besenok.smarthome.ui.common.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +23,7 @@ private const val TAG = "DeviceDetailViewModel"
 class DeviceDetailViewModel @Inject constructor(
     private val getDevicesUseCase: GetDevicesUseCase,
     private val setDeviceStateUseCase: SetDeviceStateUseCase,
+    private val renameParameterUseCase: RenameParameterUseCase,
     private val getDevicesFromAdapterUseCase: com.besenok.smarthome.domain.usecase.adapter.GetDevicesFromAdapterUseCase
 ) : ViewModel() {
 
@@ -150,6 +152,34 @@ class DeviceDetailViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating state", e)
                 _setStateState.value = UiState.Error(e.message ?: "Ошибка обновления состояния")
+            }
+        }
+    }
+
+    /**
+     * Переименовывает параметр (канал) устройства.
+     * Пустое имя сбрасывает пользовательское название к оригинальному.
+     */
+    fun renameParameter(objectId: String, newName: String) {
+        viewModelScope.launch {
+            try {
+                renameParameterUseCase(objectId, newName)
+                val current = (_device.value as? UiState.Success)?.data ?: return@launch
+                val fallbackName = objectId.substringAfterLast(".")
+                _device.value = UiState.Success(
+                    current.copy(
+                        channels = current.channels.map { channel ->
+                            if (channel.id == objectId) {
+                                channel.copy(name = newName.ifBlank { fallbackName })
+                            } else {
+                                channel
+                            }
+                        }
+                    )
+                )
+                Log.d(TAG, "Parameter $objectId renamed to '$newName'")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error renaming parameter $objectId", e)
             }
         }
     }

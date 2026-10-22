@@ -44,10 +44,36 @@ class IobrokerRepositoryImpl @Inject constructor(
             Log.d(TAG, "Getting devices from ioBroker...")
             val devices = parseDevicesFromObjects()
             Log.d(TAG, "Parsed ${devices.size} devices: $devices")
-            UiState.Success(devices)
+            UiState.Success(applyCustomNames(devices))
         } catch (e: Exception) {
             Log.e(TAG, "Error getting devices", e)
             UiState.Error(e.message ?: "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СѓСЃС‚СЂРѕР№СЃС‚РІ")
+        }
+    }
+
+    /**
+     * Применяет пользовательские имена устройств и параметров (каналов) из DataStore
+     */
+    private suspend fun applyCustomNames(devices: List<Device>): List<Device> {
+        if (devices.isEmpty()) return devices
+
+        val deviceNames = settingsDataSource.getAllDeviceNames()
+        val parameterNames = settingsDataSource.getAllParameterNames()
+        if (deviceNames.isEmpty() && parameterNames.isEmpty()) return devices
+
+        return devices.map { device ->
+            device.copy(
+                name = deviceNames[device.id]?.takeIf { it.isNotBlank() } ?: device.name,
+                channels = if (parameterNames.isEmpty()) {
+                    device.channels
+                } else {
+                    device.channels.map { channel ->
+                        parameterNames[channel.id]?.takeIf { it.isNotBlank() }
+                            ?.let { channel.copy(name = it) }
+                            ?: channel
+                    }
+                }
+            )
         }
     }
 
@@ -617,7 +643,7 @@ class IobrokerRepositoryImpl @Inject constructor(
                 icon = null
             )
             
-            UiState.Success(device)
+            UiState.Success(applyCustomNames(listOf(device)).first())
         } catch (e: Exception) {
             Log.e(TAG, "Error getting device $deviceId", e)
             UiState.Error(e.message ?: "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СѓСЃС‚СЂРѕР№СЃС‚РІР°")
@@ -673,7 +699,7 @@ class IobrokerRepositoryImpl @Inject constructor(
             Log.d(TAG, "Getting devices from adapter: $adapterId...")
             val devices = apiClient.getAdapterDevices(adapterId)
             Log.d(TAG, "Got ${devices.size} devices from adapter $adapterId")
-            UiState.Success(devices)
+            UiState.Success(applyCustomNames(devices))
         } catch (e: Exception) {
             Log.e(TAG, "Error getting devices from adapter $adapterId", e)
             UiState.Error(e.message ?: "РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СѓСЃС‚СЂРѕР№СЃС‚РІ РёР· Р°РґР°РїС‚РµСЂР°")

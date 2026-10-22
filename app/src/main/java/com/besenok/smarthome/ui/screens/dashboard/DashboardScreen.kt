@@ -35,6 +35,7 @@ fun DashboardScreen(
     val devices by viewModel.devicesState.collectAsState()
     val slots by viewModel.dashboardSlots.collectAsState()
     val parameterValues by viewModel.parameterValues.collectAsState()
+    val parameterNames by viewModel.parameterNames.collectAsState()
     var pickerSlot by remember { mutableStateOf<Int?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember { AppPreferencesDataSource(context) }
@@ -66,6 +67,7 @@ fun DashboardScreen(
         ParameterPickerDialog(
             devicesState = devices,
             customDeviceNames = customDeviceNames.value,
+            customParameterNames = parameterNames,
             onDismiss = { pickerSlot = null },
             onPick = { objectId ->
                 viewModel.selectParameter(slotIndex, objectId)
@@ -105,6 +107,7 @@ fun DashboardScreen(
                         slotIndex = slotIndex,
                         objectId = objectId,
                         devices = devices,
+                        customName = objectId?.let { parameterNames[it] },
                         value = objectId?.let { parameterValues[it] },
                         onPick = {
                             viewModel.loadDevices()
@@ -137,6 +140,7 @@ fun DashboardParameterCell(
     slotIndex: Int,
     objectId: String?,
     devices: UiState<List<Device>>,
+    customName: String?,
     value: UiState<Any?>?,
     onPick: () -> Unit,
     onClear: () -> Unit
@@ -192,9 +196,9 @@ fun DashboardParameterCell(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Лейбл: имя параметра
+            // Лейбл: имя параметра (пользовательское имя из DataStore имеет приоритет)
             Text(
-                text = label.parameterName,
+                text = customName ?: label.parameterName,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -272,6 +276,7 @@ fun DashboardParameterCell(
 fun ParameterPickerDialog(
     devicesState: UiState<List<Device>>,
     customDeviceNames: Map<String, String>,
+    customParameterNames: Map<String, String>,
     onDismiss: () -> Unit,
     onPick: (String) -> Unit
 ) {
@@ -340,7 +345,11 @@ fun ParameterPickerDialog(
                                 items(parameters, key = { it.id }) { channel ->
                                     ListItem(
                                         headlineContent = {
-                                            Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(
+                                                customParameterNames[channel.id] ?: channel.name,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         },
                                         supportingContent = {
                                             Text(channel.id, maxLines = 1, overflow = TextOverflow.Ellipsis)

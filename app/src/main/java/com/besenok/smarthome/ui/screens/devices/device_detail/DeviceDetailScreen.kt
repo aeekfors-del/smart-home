@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.besenok.smarthome.domain.model.ControlType
+import com.besenok.smarthome.domain.model.Device
 import com.besenok.smarthome.ui.common.UiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,8 +35,23 @@ fun DeviceDetailScreen(
     // Оптимистичное обновление - храним временные значения для каналов
     val temporaryStates = remember { mutableMapOf<String, Any>() }
 
+    // Параметр, который сейчас переименовывается
+    var renamingChannel by remember { mutableStateOf<Device.Channel?>(null) }
+
     LaunchedEffect(deviceId) {
         viewModel.loadDevice(deviceId)
+    }
+
+    // Диалог переименования параметра
+    renamingChannel?.let { channel ->
+        RenameParameterDialog(
+            parameterName = channel.name,
+            onDismiss = { renamingChannel = null },
+            onConfirm = { newName ->
+                viewModel.renameParameter(channel.id, newName)
+                renamingChannel = null
+            }
+        )
     }
 
     Scaffold(
@@ -99,7 +116,8 @@ fun DeviceDetailScreen(
                                 // Оптимистичное обновление - сразу обновляем UI
                                 temporaryStates[channel.id] = newValue
                                 viewModel.updateState(channel.id, newValue)
-                            }
+                            },
+                            onRename = { renamingChannel = channel }
                         )
                     }
                 }
@@ -143,7 +161,8 @@ private fun DeviceInfoCompact(device: com.besenok.smarthome.domain.model.Device)
 private fun ChannelCompactCard(
     channel: com.besenok.smarthome.domain.model.Device.Channel,
     temporaryValue: Any?,
-    onToggle: (Any) -> Unit
+    onToggle: (Any) -> Unit,
+    onRename: () -> Unit
 ) {
     // Используем temporary значение, если оно есть, иначе реальное
     val displayValue = temporaryValue ?: channel.state?.value
@@ -163,11 +182,27 @@ private fun ChannelCompactCard(
         ) {
             // Левая часть - название и значение
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = channel.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = channel.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = onRename,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Переименовать параметр",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
                 
                 Spacer(modifier = Modifier.height(2.dp))
                 

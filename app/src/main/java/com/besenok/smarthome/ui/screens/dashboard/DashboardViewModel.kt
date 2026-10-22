@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -61,6 +62,10 @@ class DashboardViewModel @Inject constructor(
     private val _parameterValues = MutableStateFlow<Map<String, UiState<Any?>>>(emptyMap())
     val parameterValues: StateFlow<Map<String, UiState<Any?>>> = _parameterValues.asStateFlow()
 
+    /** Пользовательские имена параметров: objectId -> имя (обновляются сразу после переименования) */
+    val parameterNames: StateFlow<Map<String, String>> = preferences.parameterNames
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
     init {
         viewModelScope.launch {
             iobrokerRepository.connect()
@@ -90,6 +95,12 @@ class DashboardViewModel @Inject constructor(
                 delay(PARAMETER_REFRESH_INTERVAL_MS)
                 loadParameterValues(dashboardSlots.value)
             }
+        }
+
+        // После переименования параметра перезагружаем устройства,
+        // чтобы восстановить оригинальные имена при сбросе переопределения
+        viewModelScope.launch {
+            preferences.parameterNames.drop(1).collect { loadDevices() }
         }
     }
 

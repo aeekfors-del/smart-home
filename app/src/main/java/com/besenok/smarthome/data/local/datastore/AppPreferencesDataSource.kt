@@ -45,6 +45,9 @@ class AppPreferencesDataSource(private val context: Context) {
 
         // Device names storage keys
         const val DEVICE_NAMES_PREFIX = "device_name_"
+
+        // Parameter (channel) names storage keys
+        const val PARAMETER_NAMES_PREFIX = "parameter_name_"
         
         // Added adapters storage
         val ADAPTERS_LIST = stringPreferencesKey("added_adapters")
@@ -270,6 +273,66 @@ class AppPreferencesDataSource(private val context: Context) {
                 preferences[key] = objectId
             }
         }
+    }
+
+    // ========== Parameter (channel) Names Storage ==========
+
+    /**
+     * Сохраняет пользовательское имя параметра (канала)
+     * @param objectId ID состояния ioBroker (например, mihome.0.devices.sensor_ht_1.temperature)
+     * @param customName Пользовательское имя (null для удаления)
+     */
+    suspend fun saveParameterName(objectId: String, customName: String?) {
+        withContext(Dispatchers.IO) {
+            val key = stringPreferencesKey(PARAMETER_NAMES_PREFIX + objectId)
+            context.dataStore.edit { preferences ->
+                if (customName != null) {
+                    preferences[key] = customName
+                } else {
+                    preferences.remove(key)
+                }
+            }
+        }
+    }
+
+    /**
+     * Получает пользовательское имя параметра
+     * @return Пользовательское имя или null если не сохранено
+     */
+    suspend fun getCustomParameterName(objectId: String): String? {
+        return context.dataStore.data.first()[stringPreferencesKey(PARAMETER_NAMES_PREFIX + objectId)]
+    }
+
+    /**
+     * Пользовательские имена параметров в виде потока: objectId -> имя.
+     * Позволяет UI обновляться сразу после переименования.
+     */
+    val parameterNames: Flow<Map<String, String>> = context.dataStore.data.map { preferences ->
+        preferences.asMap()
+            .filterKeys { (it as? androidx.datastore.preferences.core.Preferences.Key<*>)?.name?.startsWith(PARAMETER_NAMES_PREFIX) == true }
+            .mapValues { it.value as? String ?: "" }
+            .filter { it.value.isNotEmpty() }
+            .mapKeys { (it.key as? androidx.datastore.preferences.core.Preferences.Key<*>)?.name?.substring(PARAMETER_NAMES_PREFIX.length) ?: "" }
+    }
+
+    /**
+     * Получает все сохранённые имена параметров
+     * @return Map где ключ - objectId параметра, значение - имя
+     */
+    suspend fun getAllParameterNames(): Map<String, String> {
+        val preferences = context.dataStore.data.first()
+        return preferences.asMap()
+            .filterKeys { (it as? androidx.datastore.preferences.core.Preferences.Key<*>)?.name?.startsWith(PARAMETER_NAMES_PREFIX) == true }
+            .mapValues { it.value as? String ?: "" }
+            .filter { it.value.isNotEmpty() }
+            .mapKeys { (it.key as? androidx.datastore.preferences.core.Preferences.Key<*>)?.name?.substring(PARAMETER_NAMES_PREFIX.length) ?: "" }
+    }
+
+    /**
+     * Удаляет пользовательское имя параметра (возвращает к оригинальному)
+     */
+    suspend fun deleteParameterName(objectId: String) {
+        saveParameterName(objectId, null)
     }
 
     // ========== Added Adapters Storage ==========
